@@ -22,6 +22,9 @@ using Exiled.Events.EventArgs.Map;
 using LightContainmentZoneDecontamination;
 using PluginAPI.Roles;
 using Exiled.Events.EventArgs.Interfaces;
+using Exiled.Events.EventArgs.Scp914;
+using Exiled.API.Features.Pickups;
+using Scp914;
 
 namespace CustomGameModes.GameModes
 {
@@ -33,14 +36,16 @@ namespace CustomGameModes.GameModes
         List<Door> LCZDoors = new();
         Player beast;
         List<Player> ClassD = new();
+        DhasRoleManager Manager;
+        bool cassieBeastEscaped = false;
 
         CoroutineHandle roundHandlerCO;
 
         int CountdownTime = 65;
-        int RoundTime = 20 * 60;
+        int RoundTime = 10 * 60;
         // int RoundTime = 60;
 
-        int EndOfRoundTime = 20;
+        int EndOfRoundTime = 30;
 
         public void OnRoundStart()
         {
@@ -50,13 +55,15 @@ namespace CustomGameModes.GameModes
             PlayerEvent.InteractingDoor += OnInteractDoor;
             MapEvent.SpawningTeamVehicle += OnSpawnTeam;
             PlayerEvent.Hurting += OnHurting;
-            PlayerEvent.SearchingPickup += DeniableEvent;
+            PlayerEvent.SearchingPickup += OnSearchingPickup;
             PlayerEvent.DroppingAmmo += DeniableEvent;
-            PlayerEvent.DroppingItem += DeniableEvent;
+            PlayerEvent.DroppingItem += OnDropItem;
+            PlayerEvent.PlayerDamageWindow += PlayerDamagingWindow;
 
-            Scp914Handler.Activating += DeniableEvent;
-            Scp914Handler.ChangingKnobSetting += DeniableEvent;
-            Scp914Handler.UpgradingPickup += DeniableEvent;
+            Scp914Handler.Activating += Activate914;
+            Scp914Handler.UpgradingPickup += UpgradePickup;
+            //Scp914Handler.ChangingKnobSetting += DeniableEvent;
+            //Scp914Handler.UpgradingPickup += DeniableEvent;
             Scp914Handler.UpgradingInventoryItem += DeniableEvent;
             Scp914Handler.UpgradingPlayer += DeniableEvent;
             // -------------------------------------------------------------
@@ -64,7 +71,7 @@ namespace CustomGameModes.GameModes
 
             DecontaminationController.Singleton.NetworkDecontaminationOverride = DecontaminationController.DecontaminationStatus.Disabled;
 
-            roundHandlerCO = Timing.RunCoroutine(_roundHandle());
+            roundHandlerCO = Timing.RunCoroutine(_wrapRoundHandle());
         }
 
         public void OnRoundEnd(RoundEndedEventArgs ev)
@@ -75,13 +82,15 @@ namespace CustomGameModes.GameModes
             PlayerEvent.InteractingDoor -= OnInteractDoor;
             MapEvent.SpawningTeamVehicle -= OnSpawnTeam;
             PlayerEvent.Hurting -= OnHurting;
-            PlayerEvent.SearchingPickup -= DeniableEvent;
+            PlayerEvent.SearchingPickup -= OnSearchingPickup;
             PlayerEvent.DroppingAmmo -= DeniableEvent;
-            PlayerEvent.DroppingItem -= DeniableEvent;
+            PlayerEvent.DroppingItem -= OnDropItem;
+            PlayerEvent.PlayerDamageWindow -= PlayerDamagingWindow;
 
-            Scp914Handler.Activating -= DeniableEvent;
-            Scp914Handler.ChangingKnobSetting -= DeniableEvent;
-            Scp914Handler.UpgradingPickup -= DeniableEvent;
+            Scp914Handler.Activating -= Activate914;
+            Scp914Handler.UpgradingPickup -= UpgradePickup;
+            //Scp914Handler.ChangingKnobSetting -= DeniableEvent;
+            //Scp914Handler.UpgradingPickup -= DeniableEvent;
             Scp914Handler.UpgradingInventoryItem -= DeniableEvent;
             Scp914Handler.UpgradingPlayer -= DeniableEvent;
             // -------------------------------------------------------------
@@ -99,6 +108,7 @@ namespace CustomGameModes.GameModes
             }
             // else, the Class-D survived long enough.
 
+            Manager.StopAll();
         }
 
         public void OnWaitingForPlayers()
@@ -109,6 +119,52 @@ namespace CustomGameModes.GameModes
 
         #region Event Handlers
 
+        private void PlayerDamagingWindow(DamagingWindowEventArgs e)
+        {
+            if (e.Player.Role.Team == PlayerRoles.Team.SCPs && beastReleased)
+            {
+                if (!cassieBeastEscaped)
+                {
+                    cassieBeastEscaped = true;
+                    Cassie.MessageTranslated("S C P 9 3 9 has escaped containment", "SCP-939 Has Escaped Containment");
+                }
+            }
+            else
+            {
+                e.IsAllowed = false;
+            }
+        }
+
+        private void OnSearchingPickup(SearchingPickupEventArgs e)
+        {
+            if (Manager == null) { e.IsAllowed = false; return; }
+            if (Manager.ClaimedPickups.TryGetValue(e.Pickup, out var assignedPlayer) && e.Player == assignedPlayer)
+            {
+                // allow it
+            }
+            else if (e.Pickup.PreviousOwner == e.Player)
+            {
+                // allow it
+            }
+            else
+            {
+                e.IsAllowed = false;
+            }
+        }
+
+        private void OnDropItem(DroppingItemEventArgs e)
+        {
+            if (Manager == null) { e.IsAllowed = false; return; }
+            if (Manager.ItemsToDrop.TryGetValue(e.Item.Type, out var assignedPlayer) && e.Player == assignedPlayer)
+            {
+                // allow it
+            }
+            else
+            {
+                e.IsAllowed = false;
+            }
+        }
+
         private void OnSpawnTeam(SpawningTeamVehicleEventArgs ev)
         {
             // should be enough to prevent MTF and Chaos from spawning?
@@ -118,8 +174,20 @@ namespace CustomGameModes.GameModes
 
         private void OnInteractDoor(InteractingDoorEventArgs ev)
         {
-            // NO DOORS
-            ev.IsAllowed = false;
+            if (Manager == null) { ev.IsAllowed = false; return; }
+            if (Manager.DoorsToOpen.TryGetValue(ev.Door, out var assignedPlayers) && assignedPlayers.Contains(ev.Player))
+            {
+                // allow it
+            }
+            else if (ev.Door.Type == DoorType.Airlock)
+            {
+                // allow it
+            }
+            else
+            {
+                // NO DOORS
+                ev.IsAllowed = false;
+            }
         }
 
         private void OnHurting(HurtingEventArgs ev)
@@ -142,6 +210,35 @@ namespace CustomGameModes.GameModes
             }
         }
 
+        private void Activate914(ActivatingEventArgs ev)
+        {
+            if (Manager == null) { ev.IsAllowed = false; return; }
+            if (!Manager.AllowedToUse914.Contains(ev.Player)) { ev.IsAllowed = false; return; };
+        }
+
+        private void UpgradePickup(UpgradingPickupEventArgs ev)
+        {
+            if (Manager == null) { ev.IsAllowed = false; return; }
+            if (Enum.GetName(typeof(ItemType), ev.Pickup.Type).StartsWith("Keycard"))
+            {
+                ev.IsAllowed = false;
+                ev.Pickup.UnSpawn();
+                var newType = ev.KnobSetting switch
+                {
+                    Scp914KnobSetting.VeryFine => ItemType.KeycardO5,
+                    Scp914KnobSetting.Fine => ItemType.KeycardResearchCoordinator,
+                    Scp914KnobSetting.OneToOne => ev.Pickup.Type,
+                    Scp914KnobSetting.Coarse => ItemType.KeycardJanitor,
+                    Scp914KnobSetting.Rough => ItemType.KeycardJanitor,
+                };
+                var newPickup = Pickup.CreateAndSpawn(newType, ev.OutputPosition, ev.Pickup.Rotation, ev.Pickup.PreviousOwner);
+            }
+            else
+            {
+                ev.IsAllowed = false;
+            }
+        }
+
         public void DeniableEvent(IDeniableEvent ev)
         {
             ev.IsAllowed = false;
@@ -151,23 +248,79 @@ namespace CustomGameModes.GameModes
 
         #region GameHandle
 
+        private IEnumerator<float> _wrapRoundHandle()
+        {
+            var r = _roundHandle();
+            var d = true;
+            while (d)
+            {
+                try
+                {
+                    d = r.MoveNext();
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e);
+                    break;
+                }
+                if (d)
+                    yield return r.Current;
+            }
+        }
+
         private IEnumerator<float> _roundHandle()
         {
 
             List<Player> players = Player.List.ToList();
             players.ShuffleList();
 
+            Log.Debug("Starting a new game");
+
+            Manager = new DhasRoleManager();
+
             var iterator = 0;
+
+            // ----------------------------------------------------------------------------------------------------------------
+            // ----------------------------------------------------------------------------------------------------------------
+            #region Set up Doors
+            foreach (var outsideDoor in Door.Get(door => door.Zone != ZoneType.LightContainment))
+            {
+                outsideDoor.IsOpen = false;
+            }
 
             LCZDoors = Door.Get(door => door.Zone == ZoneType.LightContainment).ToList();
 
             beastDoor = Room.Get(RoomType.LczGlassBox).Doors.First(d => d.Rooms.Count == 1 && d.IsGate);
+            var innerGR18Door = Room.Get(RoomType.LczGlassBox).Doors.First(d => d.Rooms.Count == 1 && !d.IsGate);
+
+            var doorsDoNotOpen = new HashSet<Door>()
+            {
+                Room.Get(RoomType.Lcz173).Doors.First(d => d.IsGate),
+                Room.Get(RoomType.LczArmory).Doors.First(d => d.Rooms.Count == 1),
+                Door.Get(DoorType.CheckpointLczA),
+                Door.Get(DoorType.CheckpointLczA),
+                Door.Get(DoorType.CheckpointLczB),
+                innerGR18Door,
+            };
+
+            foreach (var door in LCZDoors)
+            {
+                if (door.Rooms.Count == 1 && door.Room.RoomName == MapGeneration.RoomName.LczCheckpointA) doorsDoNotOpen.Add(door);
+                if (door.Rooms.Count == 1 && door.Room.RoomName == MapGeneration.RoomName.LczCheckpointB) doorsDoNotOpen.Add(door);
+            }
 
             foreach (var lczdoor in LCZDoors)
             {
-                if (lczdoor != beastDoor)
+                if (!doorsDoNotOpen.Contains(lczdoor))
                     lczdoor.IsOpen = true;
+                else
+                    lczdoor.IsOpen = false;
             }
+
+            #endregion
+            // ----------------------------------------------------------------------------------------------------------------
+            // ----------------------------------------------------------------------------------------------------------------
+            #region Set up Players
 
             while (iterator < players.Count)
             {
@@ -176,13 +329,18 @@ namespace CustomGameModes.GameModes
                 if (iterator == 0)
                 {
                     player.Role.Set(PlayerRoles.RoleTypeId.Scp939);
-                    var cafe = SpawnLocationType.InsideGr18.GetPosition();
-                    player.Position = cafe;
+                    var doorDelta = beastDoor.Position - innerGR18Door.Position;
+                    Vector3 box;
+                    if (Math.Abs(doorDelta.x) > Math.Abs(doorDelta.z))
+                        box = new Vector3(beastDoor.Position.x - doorDelta.x, beastDoor.Position.y + 1, beastDoor.Position.z);
+                    else
+                        box = new Vector3(beastDoor.Position.x, beastDoor.Position.y + 1, beastDoor.Position.z - doorDelta.z);
+                    player.Position = box;
                     beast = player;
                 }
                 else
                 {
-                    player.Role.Set(PlayerRoles.RoleTypeId.ClassD);
+                    Manager.ApplyRoleToPlayer(player);
                     var item = player.AddItem(ItemType.Flashlight);
                     player.CurrentItem = item;
                     ClassD.Add(player);
@@ -190,24 +348,76 @@ namespace CustomGameModes.GameModes
                 iterator++;
             }
 
-            Map.TurnOffAllLights(RoundTime + CountdownTime);
+            #endregion
+            // ----------------------------------------------------------------------------------------------------------------
+            // ----------------------------------------------------------------------------------------------------------------
+            #region Lights
 
-            foreach (var dclass in ClassD)
-                CountdownHelper.AddCountdown(dclass, "Hide!\nReleasing the Beast in:", TimeSpan.FromSeconds(CountdownTime));
-            CountdownHelper.AddCountdown(beast, "The Class-D are hiding!\nYou will be released in:", TimeSpan.FromSeconds(CountdownTime));
+            yield return Timing.WaitForSeconds(2);
 
-            yield return Timing.WaitForSeconds(CountdownTime);
+            // turn off all the lights in each room except for those that have players in them
+            {
+                var playerRooms = ClassD.Select(player => player.CurrentRoom);
+                foreach (var room in Room.Get(ZoneType.LightContainment))
+                {
+                    if (playerRooms.Contains(room)) continue;
+                    room.TurnOffLights(9999f);
+                }
+            }
+
+            #endregion
+            // ----------------------------------------------------------------------------------------------------------------
+            // ----------------------------------------------------------------------------------------------------------------
+
+            var timerTotalSeconds = CountdownTime;
+            var timerStartedTime = DateTime.Now;
+
+            var classDMessage = classDMessageWaiting;
+            var beastMessage = beastMessageWaiting;
+            void removeTime(int seconds)
+            {
+                var elapsed = (int)(DateTime.Now - timerStartedTime).TotalSeconds;
+                timerTotalSeconds -= seconds;
+                var remainingSeconds = timerTotalSeconds - elapsed;
+                foreach (var dclass in ClassD)
+                {
+                    CountdownHelper.AddCountdown(dclass, classDMessage, TimeSpan.FromSeconds(remainingSeconds));
+                }
+                CountdownHelper.AddCountdown(beast, beastMessage, TimeSpan.FromSeconds(remainingSeconds));
+            }
+
+            Manager.StartAll();
+            removeTime(0);
+            Manager.RemovingTime += removeTime;
+            Manager.PlayerDied += onPlayerRoleDied;
+            Manager.PlayerCompleteAllTasks += onPlayerCompleteAllTasks;
+            while ((DateTime.Now - timerStartedTime).TotalSeconds < timerTotalSeconds) yield return Timing.WaitForSeconds(1);
+
+            // ----------------------------------------------------------------------------------------------------------------
+            // ----------------------------------------------------------------------------------------------------------------
 
             beastReleased = true;
+            timerTotalSeconds = RoundTime;
+            timerStartedTime = DateTime.Now;
+            classDMessage = classDMessageActive;
+            beastMessage = beastMessageActive;
 
-            Cassie.MessageTranslated("S C P 9 3 9 has escaped containment", "SCP-939 Has Escaped Containment");
-            beastDoor.IsOpen = true;
+            beast.ShowHint("Break Free", 5);
+            removeTime(0);
+            while ((DateTime.Now - timerStartedTime).TotalSeconds < timerTotalSeconds) yield return Timing.WaitForSeconds(1);
 
-            foreach (var dclass in ClassD)
-                CountdownHelper.AddCountdown(dclass, "Survive!", TimeSpan.FromSeconds(RoundTime));
-            CountdownHelper.AddCountdown(beast, "Kill Them ALL", TimeSpan.FromSeconds(RoundTime));
+            Manager.RemovingTime -= removeTime;
+            Manager.PlayerDied -= onPlayerRoleDied;
+            Manager.PlayerCompleteAllTasks -= onPlayerCompleteAllTasks;
 
-            yield return Timing.WaitForSeconds(RoundTime);
+            // ----------------------------------------------------------------------------------------------------------------
+            // Time Ran out, humans win!
+            // ----------------------------------------------------------------------------------------------------------------
+
+            foreach (var room in Room.Get(ZoneType.LightContainment))
+            {
+                room.AreLightsOff = false;
+            }
 
             Cassie.MessageTranslated("The Class D Are Successful", "Class-D Win!");
 
@@ -223,8 +433,28 @@ namespace CustomGameModes.GameModes
             yield return Timing.WaitForSeconds(EndOfRoundTime);
 
             beast.Hurt(-1);
+            // ----------------------------------------------------------------------------------------------------------------
+            // ----------------------------------------------------------------------------------------------------------------
         }
 
         #endregion
+
+        private static string classDMessageWaiting = "Releasing the Beast in: ❤";
+        private static string beastMessageWaiting = "The Class-D are hiding!\nYou will be released in:";
+        private static string classDMessageActive = "Do your tasks and Survive!";
+        private static string beastMessageActive = "Kill Everyone!";
+
+
+        private void onPlayerRoleDied(Player ev)
+        {
+            var playerDeadCount = Player.List.Where(p => p.Role.Type == PlayerRoles.RoleTypeId.Spectator).Count();
+            Cassie.Clear();
+            Cassie.DelayedMessage($"{playerDeadCount} personnal are dead", 3f);
+        }
+
+        private void onPlayerCompleteAllTasks(Player ev)
+        {
+
+        }
     }
 }

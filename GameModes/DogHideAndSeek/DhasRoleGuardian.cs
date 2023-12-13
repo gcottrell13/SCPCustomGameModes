@@ -1,0 +1,155 @@
+﻿using Exiled.API.Enums;
+using Exiled.API.Extensions;
+using Exiled.API.Features;
+using Exiled.API.Features.Doors;
+using Exiled.API.Features.Items;
+using Exiled.API.Features.Pickups;
+using Exiled.Events.EventArgs.Player;
+using MEC;
+using PlayerRoles;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using PlayerEvent = Exiled.Events.Handlers.Player;
+
+namespace CustomGameModes.GameModes
+{
+    internal class DhasRoleGuardian : DhasRole
+    {
+        public override RoleTypeId RoleType() => RoleTypeId.Scientist;
+        private RoleTypeId _escapedRole = RoleTypeId.NtfCaptain;
+
+        public override List<dhasTask> Tasks => new()
+        {
+            GetAKeycard,
+            UpgradeKeycard,
+            EscapeToHcz,
+            ProtectTeammates,
+        };
+
+        public DhasRoleGuardian(Player player, DhasRoleManager manager) : base(player, manager)
+        {
+            player.Role.Set(RoleType(), RoleSpawnFlags.UseSpawnpoint);
+        }
+
+        /// <summary>
+        /// idempotent stop()
+        /// </summary>
+        public override void OnStop()
+        {
+            if (CurrentTask == ProtectTeammates)
+            {
+                // unbind
+                PlayerEvent.Hurting -= Hurting;
+                PlayerEvent.Died -= OnDied;
+            }
+        }
+
+
+        [CrewmateTask(TaskDifficulty.Easy)]
+        private IEnumerator<float> GetAKeycard()
+        {
+            bool predicate(Pickup pickup) => pickup.Type == ItemType.KeycardScientist;
+            void onFail() { player.CurrentItem = player.AddItem(ItemType.KeycardScientist); }
+
+            while(GoGetPickup(predicate, onFail) && MyTargetPickup != null) {
+                var compass = GetCompass(MyTargetPickup.Position);
+                FormatTask("Pick up a Keycard", compass);
+                yield return Timing.WaitForSeconds(0.5f);
+            }
+
+            // Assuming we have the keycard now
+            ShowTaskCompleteMessage(3);
+            yield return Timing.WaitForSeconds(3);
+        }
+
+        [CrewmateTask(TaskDifficulty.Hard)]
+        private IEnumerator<float> UpgradeKeycard()
+        {
+            CanUse914();
+            CanDropItem(ItemType.KeycardScientist);
+
+            while (NotHasItem(ItemType.KeycardO5, out var item))
+            {
+                var compass = GetCompass(Door.Get(DoorType.Scp914Gate).Position);
+                FormatTask("Upgrade Your Keycard", compass);
+                yield return Timing.WaitForSeconds(1);
+            }
+
+            CannotDropItem(ItemType.KeycardScientist);
+            CannotUse914();
+            // Assuming we have the keycard now
+            ShowTaskCompleteMessage(3);
+            yield return Timing.WaitForSeconds(3);
+        }
+
+
+        [CrewmateTask(TaskDifficulty.Medium)]
+        private IEnumerator<float> EscapeToHcz()
+        {
+            var allowedDoors = new List<Door>()
+            {
+                Door.Get(DoorType.CheckpointLczA),
+                Door.Get(DoorType.CheckpointLczB),
+                Door.Get(DoorType.ElevatorLczA),
+                Door.Get(DoorType.ElevatorLczB),
+            };
+
+            Manager.PlayerCanUseDoors(allowedDoors, player);
+            while (player.CurrentRoom.Zone != ZoneType.HeavyContainment)
+            {
+                FormatTask("Escape To Heavy Containment", "");
+                yield return Timing.WaitForSeconds(1);
+            }
+
+            player.Role.Set(_escapedRole, RoleSpawnFlags.None);
+            player.AddAmmo(AmmoType.Nato556, 50);
+            EnsureItem(ItemType.GunE11SR);
+            ShowTaskCompleteMessage(3);
+            yield return Timing.WaitForSeconds(3);
+        }
+
+        [CrewmateTask(TaskDifficulty.Hard)]
+        private IEnumerator<float> ProtectTeammates()
+        {
+            // since this is a never-ending task, we can't accept any cooperative tasks.
+            AlreadyAcceptedCooperativeTasks = true;
+
+            // bind event listeners
+            PlayerEvent.Hurting += Hurting;
+            PlayerEvent.Died += OnDied;
+
+            while (IsRunning)
+            {
+                FormatTask("Protect your Teammates", "");
+                yield return Timing.WaitForSeconds(1);
+            }
+            Manager.ClearPlayerAllowedDoors(player);
+        }
+
+
+        #region Event Handlers
+
+        private void Hurting(HurtingEventArgs ev)
+        {
+            if (ev.Player.Role.Team == Team.SCPs && ev.Attacker == player)
+            {
+                ev.Player.EnableEffect(EffectType.SinkHole, duration: 1f);
+            }
+        }
+
+        private void OnDied(DiedEventArgs ev)
+        {
+            ev.Player.Role.Set(_escapedRole, RoleSpawnFlags.None);
+            player.AddAmmo(AmmoType.Nato556, 50);
+            EnsureItem(ItemType.GunE11SR);
+            player.Position = ChooseFarthestPlayer()?.Position 
+                ?? ev.Attacker?.Position 
+                ?? SpawnLocationType.Inside173Bottom.GetPosition() + UnityEngine.Vector3.up;
+        }
+
+        #endregion
+    }
+}
