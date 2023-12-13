@@ -201,6 +201,10 @@ namespace CustomGameModes.GameModes
                     ev.IsAllowed = false;
                 }
             }
+            else if (Manager.HurtRoles.TryGetValue(ev.Attacker, out var roles) && roles.Contains(ev.Player.Role.Type))
+            {
+                // allow it
+            }
             else
             {
                 if (ev.Attacker?.Role.Team == PlayerRoles.Team.ClassD)
@@ -219,7 +223,7 @@ namespace CustomGameModes.GameModes
         private void UpgradePickup(UpgradingPickupEventArgs ev)
         {
             if (Manager == null) { ev.IsAllowed = false; return; }
-            if (Enum.GetName(typeof(ItemType), ev.Pickup.Type).StartsWith("Keycard"))
+            if (ev.Pickup.Type.IsKeycard())
             {
                 ev.IsAllowed = false;
                 ev.Pickup.UnSpawn();

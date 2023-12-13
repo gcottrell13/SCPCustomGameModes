@@ -233,9 +233,11 @@ namespace CustomGameModes.GameModes
             return true;
         }
 
+        public List<Player> Teammates => Player.List.Where(p => p.Role.Team != Team.SCPs).ToList();
+
         protected Player ChooseFarthestPlayer()
         {
-            var farthestPlayer = Player.List.Where(p => p.Role.Team != Team.SCPs)
+            var farthestPlayer = Teammates
                     .OrderByDescending(p => (p.Position - player.Position).magnitude)
                     .FirstOrDefault();
             if (farthestPlayer == null || farthestPlayer == player) return null;
@@ -351,5 +353,10 @@ namespace CustomGameModes.GameModes
         }
 
         public string TaskSuccessMessage => "<size=40><color=green>Task Complete!</color></size>";
+
+        public string PlayerNameFmt(Player player)
+        {
+            return $"<b><color=orange>{player.DisplayNickname}</color></b>";
+        }
     }
 }

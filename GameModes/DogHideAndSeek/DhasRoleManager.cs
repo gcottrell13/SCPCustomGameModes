@@ -2,6 +2,7 @@
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
+using PlayerRoles;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,6 +18,7 @@ namespace CustomGameModes.GameModes
         public Dictionary<ItemType, Player> ItemsToDrop = new();
         public Dictionary<Door, List<Player>> DoorsToOpen = new();
         public Dictionary<Player, DhasRole> PlayerRoles = new();
+        public Dictionary<Player, RoleTypeId[]> HurtRoles = new();
         public List<Player> AllowedToUse914 = new();
 
         public List<Func<Player, DhasRole>> RoleList { get; private set; }
@@ -32,6 +34,9 @@ namespace CustomGameModes.GameModes
         public delegate void PlayerCompleteAllTasksEvent(Player player);
         public event PlayerCompleteAllTasksEvent PlayerCompleteAllTasks;
 
+        public delegate void PlayerCompleteOneTaskEvent(Player player);
+        public event PlayerCompleteOneTaskEvent PlayerCompleteOneTask;
+
         private int roleIndex = 0;
 
         public DhasRoleManager()
@@ -39,7 +44,8 @@ namespace CustomGameModes.GameModes
             RoleList = new()
             {
                 (player) => new DhasRoleGuardian(player, this),
-                (player) => new DhasRoleGuardian(player, this),
+                (player) => new DhasRoleClassD(player, this),
+                (player) => new DhasRoleClassD(player, this),
             };
         }
 
@@ -77,6 +83,8 @@ namespace CustomGameModes.GameModes
         public void OnPlayerDied(Player player) => PlayerDied?.Invoke(player);
 
         public void OnPlayerCompleteAllTasks(Player player) => PlayerCompleteAllTasks?.Invoke(player);
+
+        public void OnPlayerCompleteOneTask(Player player) => PlayerCompleteOneTask?.Invoke(player);
 
         #region 914
 
@@ -171,5 +179,21 @@ namespace CustomGameModes.GameModes
         }
 
         #endregion
+
+
+        #region Hurting
+
+        public void PlayerCanHurtRoles(Player player, params RoleTypeId[] role)
+        {
+            HurtRoles[player] = role;
+        }
+
+        public void PlayerCannotHurt(Player player)
+        {
+            HurtRoles.Remove(player);
+        }
+
+        #endregion
+
     }
 }

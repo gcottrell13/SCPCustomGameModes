@@ -56,7 +56,7 @@ namespace CustomGameModes.GameModes
 
             while(GoGetPickup(predicate, onFail) && MyTargetPickup != null) {
                 var compass = GetCompass(MyTargetPickup.Position);
-                FormatTask("Pick up a Keycard", compass);
+                FormatTask("Pick up Your Scientist Keycard", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
 
