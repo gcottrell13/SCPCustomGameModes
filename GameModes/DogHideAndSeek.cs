@@ -25,6 +25,7 @@ using Exiled.Events.EventArgs.Interfaces;
 using Exiled.Events.EventArgs.Scp914;
 using Exiled.API.Features.Pickups;
 using Scp914;
+using PlayerRoles;
 
 namespace CustomGameModes.GameModes
 {
@@ -36,7 +37,7 @@ namespace CustomGameModes.GameModes
         List<Door> LCZDoors = new();
         Player beast;
         List<Player> ClassD = new();
-        DhasRoleManager Manager;
+        public static DhasRoleManager Manager;
         bool cassieBeastEscaped = false;
 
         CoroutineHandle roundHandlerCO;
@@ -155,7 +156,7 @@ namespace CustomGameModes.GameModes
         private void OnDropItem(DroppingItemEventArgs e)
         {
             if (Manager == null) { e.IsAllowed = false; return; }
-            if (Manager.ItemsToDrop.TryGetValue(e.Item.Type, out var assignedPlayer) && e.Player == assignedPlayer)
+            if (Manager.ItemsToDrop.TryGetValue(e.Player, out var items) && items.Contains(e.Item.Type))
             {
                 // allow it
             }
@@ -179,14 +180,24 @@ namespace CustomGameModes.GameModes
             {
                 // allow it
             }
-            else if (ev.Door.Type == DoorType.Airlock)
-            {
-                // allow it
-            }
             else
             {
-                // NO DOORS
-                ev.IsAllowed = false;
+                var allowedToggle = ev.Door.Type switch
+                {
+                    DoorType.Airlock => true,
+                    DoorType.LczArmory => true,
+                    DoorType.LczWc => true,
+                    DoorType.LczCafe => true,
+                    _ => false,
+                };
+
+                if (!allowedToggle)
+                {
+                    Timing.CallDelayed(2f, () =>
+                    {
+                        ev.Door.IsOpen = true;
+                    });
+                }
             }
         }
 
@@ -201,7 +212,7 @@ namespace CustomGameModes.GameModes
                     ev.IsAllowed = false;
                 }
             }
-            else if (Manager.HurtRoles.TryGetValue(ev.Attacker, out var roles) && roles.Contains(ev.Player.Role.Type))
+            else if (ev.Attacker != null && Manager.HurtRoles.TryGetValue(ev.Attacker, out var roles) && roles.Contains(ev.Player.Role.Type))
             {
                 // allow it
             }
@@ -274,7 +285,6 @@ namespace CustomGameModes.GameModes
 
         private IEnumerator<float> _roundHandle()
         {
-
             List<Player> players = Player.List.ToList();
             players.ShuffleList();
 
@@ -326,6 +336,8 @@ namespace CustomGameModes.GameModes
             // ----------------------------------------------------------------------------------------------------------------
             #region Set up Players
 
+            var roles = Manager.RoleDistribution;
+
             while (iterator < players.Count)
             {
                 var player = players[iterator];
@@ -344,9 +356,7 @@ namespace CustomGameModes.GameModes
                 }
                 else
                 {
-                    Manager.ApplyRoleToPlayer(player);
-                    var item = player.AddItem(ItemType.Flashlight);
-                    player.CurrentItem = item;
+                    Manager.ApplyRoleToPlayer(player, roles[iterator-1]);
                     ClassD.Add(player);
                 }
                 iterator++;
@@ -420,12 +430,17 @@ namespace CustomGameModes.GameModes
 
             foreach (var room in Room.Get(ZoneType.LightContainment))
             {
-                room.AreLightsOff = false;
+                room.TurnOffLights(-1);
             }
 
             Cassie.MessageTranslated("The Class D Are Successful", "Class-D Win!");
 
-            foreach (var classD in Player.List.Where(x => x.Role.Type == PlayerRoles.RoleTypeId.ClassD))
+            foreach (var classD in Player.List.Where(x => x.Role.Team switch
+            {
+                Team.Dead => false,
+                Team.SCPs => false,
+                _ => true,
+            }))
             {
                 classDWin = true;
                 var item = classD.AddItem(ItemType.MicroHID);
@@ -458,7 +473,7 @@ namespace CustomGameModes.GameModes
 
         private void onPlayerCompleteAllTasks(Player ev)
         {
-
+            Cassie.MessageTranslated("Personnel Has Completed All Tasks", $"{ev.DisplayNickname} has completed all tasks.", isNoisy: false);
         }
     }
 }

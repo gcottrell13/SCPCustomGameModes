@@ -19,6 +19,8 @@ namespace CustomGameModes.GameModes
 {
     internal class DhasRoleClinger : DhasRole
     {
+        public const string name = "clinger";
+
         public override RoleTypeId RoleType() => RoleTypeId.Scientist;
 
         public override void OnStop()
@@ -42,9 +44,10 @@ namespace CustomGameModes.GameModes
         private IEnumerator<float> BeNearWhenTaskComplete()
         {
             var done = false;
+            var requiredDistance = 5;
             void OnSomeoneCompleteTask(Player p)
             {
-                if ((player.Position - p.Position).magnitude < 5)
+                if ((player.Position - p.Position).magnitude < requiredDistance)
                     done = true;
             }
 
@@ -52,14 +55,15 @@ namespace CustomGameModes.GameModes
 
             while (!done)
             {
-                FormatTask("Be Near Someone (5m) When\nThey Complete a Task", "");
+                var nearest = GetNearestTeammate();
+                IsNear(nearest, requiredDistance, out var dist);
+
+                FormatTask($"Be Near Someone ({dist}) When\nThey Complete a Task", "");
                 yield return Timing.WaitForSeconds(1);
             }
 
 
             Manager.PlayerCompleteOneTask -= OnSomeoneCompleteTask;
-            ShowTaskCompleteMessage(3);
-            yield return Timing.WaitForSeconds(3);
         }
 
 
@@ -69,19 +73,17 @@ namespace CustomGameModes.GameModes
         [CrewmateTask(TaskDifficulty.Medium)]
         private IEnumerator<float> FindPlayerA()
         {
-            playerA = Teammates.Pool(x => x != player && (player.Position - x.Position).magnitude > 10);
+            var requiredDistance = 5;
+            playerA = Teammates.Pool(x => x != player && (player.Position - x.Position).magnitude > requiredDistance);
             if (playerA != null)
             {
 
-                while ((player.Position - playerA.Position).magnitude > 10)
+                while (!IsNear(playerA, requiredDistance, out var dist))
                 {
                     var compass = GetCompass(playerA.Position);
-                    FormatTask($"Be Within 10m of {PlayerNameFmt(playerA)}", compass);
-                    yield return Timing.WaitForSeconds(1);
+                    FormatTask($"Be Within {dist} of {PlayerNameFmt(playerA)}", compass);
+                    yield return Timing.WaitForSeconds(0.5f);
                 }
-
-                ShowTaskCompleteMessage(3);
-                yield return Timing.WaitForSeconds(3);
             }
         }
 
@@ -94,31 +96,25 @@ namespace CustomGameModes.GameModes
             while (GoGetPickup(predicate, onFail) && MyTargetPickup != null)
             {
                 var compass = GetCompass(MyTargetPickup.Position);
-                FormatTask("Pick up Your Scientist Keycard", compass);
+                FormatTask("Pick up a Keycard", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
-
-            // Assuming we have the keycard now
-            ShowTaskCompleteMessage(3);
-            yield return Timing.WaitForSeconds(3);
         }
 
         [CrewmateTask(TaskDifficulty.Medium)]
         private IEnumerator<float> FindPlayerB()
         {
-            playerB = Teammates.Pool(x => x != player && x != playerA && (player.Position - x.Position).magnitude > 10);
+            var requiredDistance = 5;
+            playerB = Teammates.Pool(x => x != player && x != playerA && (player.Position - x.Position).magnitude > requiredDistance);
             if (playerB != null)
             {
 
-                while ((player.Position - playerB.Position).magnitude > 10)
+                while (!IsNear(playerB, requiredDistance, out var dist))
                 {
                     var compass = GetCompass(playerB.Position);
-                    FormatTask($"Be Within 10m of {PlayerNameFmt(playerB)}", compass);
-                    yield return Timing.WaitForSeconds(1);
+                    FormatTask($"Be Within {dist} of {PlayerNameFmt(playerB)}", compass);
+                    yield return Timing.WaitForSeconds(0.5f);
                 }
-
-                ShowTaskCompleteMessage(3);
-                yield return Timing.WaitForSeconds(3);
             }
         }
 

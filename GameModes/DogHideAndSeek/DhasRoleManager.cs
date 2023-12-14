@@ -1,4 +1,5 @@
-﻿using Exiled.API.Features;
+﻿using CustomGameModes.API;
+using Exiled.API.Features;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
@@ -15,7 +16,7 @@ namespace CustomGameModes.GameModes
     {
 
         public Dictionary<Pickup, Player> ClaimedPickups = new();
-        public Dictionary<ItemType, Player> ItemsToDrop = new();
+        public Dictionary<Player, HashSet<ItemType>> ItemsToDrop = new();
         public Dictionary<Door, List<Player>> DoorsToOpen = new();
         public Dictionary<Player, DhasRole> PlayerRoles = new();
         public Dictionary<Player, RoleTypeId[]> HurtRoles = new();
@@ -37,26 +38,55 @@ namespace CustomGameModes.GameModes
         public delegate void PlayerCompleteOneTaskEvent(Player player);
         public event PlayerCompleteOneTaskEvent PlayerCompleteOneTask;
 
-        private int roleIndex = 0;
+        public string[] RoleDistribution;
 
         public DhasRoleManager()
         {
-            RoleList = new()
+            var A = new[] { DhasRoleClassD.name, DhasRoleScientist.name };
+            A.ShuffleList();
+
+            RoleDistribution = new[]
             {
-                (player) => new DhasRoleGuardian(player, this),
-                (player) => new DhasRoleClassD(player, this),
-                (player) => new DhasRoleClassD(player, this),
+                A[0],
+                A[1],
+                DhasRoleGuardian.name,
+                DhasRoleDaredevil.name,
+                DhasRoleClinger.name,
+                DhasRoleMadman.name,
+                DhasRoleClassD.name,
+                DhasRoleDaredevil.name,
+                DhasRoleClassD.name,
+                DhasRoleClinger.name,
+                DhasRoleDaredevil.name,
+                DhasRoleClassD.name,
+                DhasRoleClinger.name,
             };
         }
 
-        public DhasRole ApplyRoleToPlayer(Player player)
+        public Dictionary<string, Func<Player, DhasRole>> RoleClasses() => new()
+        {
+            {DhasRoleGuardian.name, (player) => new DhasRoleGuardian(player, this) },
+            {DhasRoleClassD.name, (player) => new DhasRoleClassD(player, this) },
+            {DhasRoleClinger.name, (player) => new DhasRoleClinger(player, this) },
+            {DhasRoleDaredevil.name, (player) => new DhasRoleDaredevil(player, this) },
+            {DhasRoleMadman.name, (player) => new DhasRoleMadman(player, this) },
+            {DhasRoleScientist.name, (player) => new DhasRoleScientist(player, this) },
+        };
+
+        public DhasRole ApplyRoleToPlayer(Player player, string name)
         {
             if (PlayerRoles.TryGetValue(player, out var existingRole))
             {
                 existingRole.Stop();
             }
 
-            var role = RoleList[roleIndex++](player);
+            player.ClearInventory();
+
+            var item = player.AddItem(ItemType.Flashlight);
+            player.CurrentItem = item;
+
+            var role = RoleClasses()[name](player);
+
             ActiveRoles.Add(role);
             PlayerRoles[player] = role;
             return role;
@@ -103,12 +133,20 @@ namespace CustomGameModes.GameModes
 
         public void CanDropItem(ItemType item, Player player)
         {
-            ItemsToDrop[item] = player;
+            if (ItemsToDrop.TryGetValue(player, out var items))
+            {
+                items.Add(item);
+            }
+            else
+            {
+                ItemsToDrop[player] = new() { item };
+            }
         }
 
-        public void CannotDropItem(ItemType item)
+        public void CannotDropItem(ItemType item, Player player)
         {
-            ItemsToDrop.Remove(item);
+            if (ItemsToDrop.ContainsKey(player))
+                ItemsToDrop[player].Remove(item);
         }
 
         #endregion

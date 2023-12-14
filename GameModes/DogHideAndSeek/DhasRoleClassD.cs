@@ -18,6 +18,8 @@ namespace CustomGameModes.GameModes
 {
     internal class DhasRoleClassD : DhasRole
     {
+        public const string name = "classd";
+
         public override RoleTypeId RoleType() => RoleTypeId.ClassD;
         public override List<dhasTask> Tasks => new()
         {
@@ -34,7 +36,14 @@ namespace CustomGameModes.GameModes
 
         public override void OnStop()
         {
+            if (CurrentTask == ShootSomeone)
+            {
+                PlayerEvent.Hurting -= Hurting;
+            }
         }
+
+
+        Pickup myCard;
 
         [CrewmateTask(TaskDifficulty.Easy)]
         private IEnumerator<float> GetAKeycard()
@@ -44,34 +53,12 @@ namespace CustomGameModes.GameModes
 
             while (GoGetPickup(predicate, onFail) && MyTargetPickup != null)
             {
+                myCard = MyTargetPickup;
                 var compass = GetCompass(MyTargetPickup.Position);
                 FormatTask("Pick up a Keycard", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
-
-            // Assuming we have the keycard now
-            ShowTaskCompleteMessage(3);
-            yield return Timing.WaitForSeconds(3);
-        }
-
-        [CrewmateTask(TaskDifficulty.Hard)]
-        private IEnumerator<float> UpgradeKeycard()
-        {
-            CanUse914();
-            CanDropItem(ItemType.KeycardScientist);
-
-            while (NotHasItem(ItemType.KeycardO5, out var item))
-            {
-                var compass = GetCompass(Door.Get(DoorType.Scp914Gate).Position);
-                FormatTask("Upgrade Your Keycard", compass);
-                yield return Timing.WaitForSeconds(1);
-            }
-
-            CannotDropItem(ItemType.KeycardScientist);
-            CannotUse914();
-            // Assuming we have the keycard now
-            ShowTaskCompleteMessage(3);
-            yield return Timing.WaitForSeconds(3);
+            MyKeycardType = myCard.Type;
         }
 
         [CrewmateTask(TaskDifficulty.Medium)]
@@ -86,9 +73,6 @@ namespace CustomGameModes.GameModes
                 FormatTask("Get Yourself a Gun", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
-
-            ShowTaskCompleteMessage(3);
-            yield return Timing.WaitForSeconds(3);
         }
 
 
@@ -102,14 +86,12 @@ namespace CustomGameModes.GameModes
 
             while (!hurtBeast)
             {
-                FormatTask("Shoot The Beast", "");
+                FormatTask("Shoot The Beast", HotAndColdToBeast());
                 yield return Timing.WaitForSeconds(1);
             }
 
             PlayerEvent.Hurting -= Hurting;
             Manager.PlayerCannotHurt(player);
-            ShowTaskCompleteMessage(3);
-            yield return Timing.WaitForSeconds(3);
         }
 
 

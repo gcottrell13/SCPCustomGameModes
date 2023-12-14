@@ -18,6 +18,8 @@ namespace CustomGameModes.GameModes
 {
     internal class DhasRoleGuardian : DhasRole
     {
+        public const string name = "guardian";
+
         public override RoleTypeId RoleType() => RoleTypeId.Scientist;
         private RoleTypeId _escapedRole = RoleTypeId.NtfCaptain;
 
@@ -59,30 +61,9 @@ namespace CustomGameModes.GameModes
                 FormatTask("Pick up Your Scientist Keycard", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
+            MyKeycardType = ItemType.KeycardScientist;
 
             // Assuming we have the keycard now
-            ShowTaskCompleteMessage(3);
-            yield return Timing.WaitForSeconds(3);
-        }
-
-        [CrewmateTask(TaskDifficulty.Hard)]
-        private IEnumerator<float> UpgradeKeycard()
-        {
-            CanUse914();
-            CanDropItem(ItemType.KeycardScientist);
-
-            while (NotHasItem(ItemType.KeycardO5, out var item))
-            {
-                var compass = GetCompass(Door.Get(DoorType.Scp914Gate).Position);
-                FormatTask("Upgrade Your Keycard", compass);
-                yield return Timing.WaitForSeconds(1);
-            }
-
-            CannotDropItem(ItemType.KeycardScientist);
-            CannotUse914();
-            // Assuming we have the keycard now
-            ShowTaskCompleteMessage(3);
-            yield return Timing.WaitForSeconds(3);
         }
 
 
@@ -97,6 +78,13 @@ namespace CustomGameModes.GameModes
                 Door.Get(DoorType.ElevatorLczB),
             };
 
+            allowedDoors.AddRange(Door.Get(door => door.Rooms.Count == 1 && door.Room.Type switch
+            {
+                RoomType.LczCheckpointA => true,
+                RoomType.LczCheckpointB => true,
+                _ => false,
+            }));
+
             Manager.PlayerCanUseDoors(allowedDoors, player);
             while (player.CurrentRoom.Zone != ZoneType.HeavyContainment)
             {
@@ -104,18 +92,21 @@ namespace CustomGameModes.GameModes
                 yield return Timing.WaitForSeconds(1);
             }
 
+            foreach (var door in player.CurrentRoom.Doors)
+            {
+                door.IsOpen = false;
+            }
+
             player.Role.Set(_escapedRole, RoleSpawnFlags.None);
             player.AddAmmo(AmmoType.Nato556, 50);
             EnsureItem(ItemType.GunE11SR);
-            ShowTaskCompleteMessage(3);
-            yield return Timing.WaitForSeconds(3);
         }
 
         [CrewmateTask(TaskDifficulty.Hard)]
         private IEnumerator<float> ProtectTeammates()
         {
             // since this is a never-ending task, we can't accept any cooperative tasks.
-            AlreadyAcceptedCooperativeTasks = true;
+            AlreadyAcceptedCooperativeTasks = player;
 
             // bind event listeners
             PlayerEvent.Hurting += Hurting;
@@ -145,7 +136,7 @@ namespace CustomGameModes.GameModes
             ev.Player.Role.Set(_escapedRole, RoleSpawnFlags.None);
             player.AddAmmo(AmmoType.Nato556, 50);
             EnsureItem(ItemType.GunE11SR);
-            player.Position = ChooseFarthestPlayer()?.Position 
+            player.Position = GetFarthestTeammate()?.Position 
                 ?? ev.Attacker?.Position 
                 ?? SpawnLocationType.Inside173Bottom.GetPosition() + UnityEngine.Vector3.up;
         }

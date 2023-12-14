@@ -35,5 +35,18 @@ namespace CustomGameModes.API
             }
             return default;
         }
+
+        public static List<T> ManyRandom<T>(this IList<T> collection, int count)
+        {
+            collection = collection.ToList();
+            var result = new List<T>();
+            for (var i = 0; i < count; i++)
+            {
+                var item = collection.RandomChoice();
+                result.Add(item);
+                collection.Remove(item);
+            }
+            return result;
+        }
     }
 }

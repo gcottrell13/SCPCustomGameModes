@@ -1,4 +1,5 @@
-﻿using Exiled.API.Features;
+﻿using Exiled.API.Enums;
+using Exiled.API.Features;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
@@ -9,7 +10,6 @@ using PlayerRoles;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -29,11 +29,11 @@ namespace CustomGameModes.GameModes
 
         #region Running State
 
-        public bool AlreadyAcceptedCooperativeTasks = false;
+        public Player AlreadyAcceptedCooperativeTasks;
 
         private CoroutineHandle _runningCoroutine;
 
-        protected Pickup MyTargetPickup;
+        public Pickup MyTargetPickup { get; private set; }
 
         public int CurrentTaskNum { get; private set; }
         public dhasTask CurrentTask { get
@@ -42,7 +42,7 @@ namespace CustomGameModes.GameModes
                 {
                     return Tasks[CurrentTaskNum];
                 }
-                catch (IndexOutOfRangeException)
+                catch (ArgumentOutOfRangeException)
                 {
                     DoneAllTasks = true;
                     return null;
@@ -113,12 +113,17 @@ namespace CustomGameModes.GameModes
                     {
                         // dead =(
                         Manager.OnPlayerDied(player);
-                        break;
+                        goto Dead;
                     }
 
                     if (d)
                         yield return nextTask.Current;
                 }
+
+                Manager.OnPlayerCompleteOneTask(player);
+
+                ShowTaskCompleteMessage(3);
+                yield return Timing.WaitForSeconds(3);
 
                 RemoveTime();
 
@@ -126,11 +131,14 @@ namespace CustomGameModes.GameModes
                 CurrentTaskNum++;
             }
 
-            Manager.OnPlayerCompleteAllTasks(player);
+            Dead:
+
+            if (CurrentTaskNum >= Tasks.Count)
+                Manager.OnPlayerCompleteAllTasks(player);
         }
 
 
-        protected void ShowTaskCompleteMessage(float duration)
+        public void ShowTaskCompleteMessage(float duration)
         {
             var d = taskDifficulty.DifficultyTime();
 
@@ -145,7 +153,7 @@ namespace CustomGameModes.GameModes
             Manager.OnRemoveTime(taskDifficulty.DifficultyTime());
         }
 
-        protected void FormatTask(string message, string compass)
+        public void FormatTask(string message, string compass)
         {
             // empty lines push it down from the middle of the screen
             var taskMessage = $"""
@@ -167,12 +175,12 @@ namespace CustomGameModes.GameModes
 
         private Pickup _claimNearestPickup(Func<Pickup, bool> predicate)
         {
-            var inZone = Pickup.List.Where(p => p.Room.Zone == player.CurrentRoom.Zone);
+            var inZone = Pickup.List.Where(p => p.Room?.Zone == player.CurrentRoom?.Zone);
             var validPickups = new List<Pickup>();
 
             foreach (var pickup in inZone)
             {
-                if (Manager.ClaimedPickups.ContainsKey(pickup)) continue;
+                if (Manager.ClaimedPickups.TryGetValue(pickup, out var owner) && owner != player) continue;
                 if (!predicate(pickup)) continue;
                 validPickups.Add(pickup);
             }
@@ -180,7 +188,17 @@ namespace CustomGameModes.GameModes
             var closePickup = validPickups.OrderBy(p => (p.Position - player.Position).magnitude).FirstOrDefault();
             if (closePickup != null)
             {
+                if (closePickup != MyTargetPickup
+                    && MyTargetPickup != null 
+                    && Manager.ClaimedPickups.ContainsKey(MyTargetPickup)
+                    && Manager.ClaimedPickups[MyTargetPickup] == player
+                    )
+                {
+                     Manager.ClaimedPickups.Remove(MyTargetPickup);
+                }
+
                 Manager.ClaimedPickups[closePickup] = player;
+                MyTargetPickup = closePickup;
                 return closePickup;
             }
             return null;
@@ -194,21 +212,17 @@ namespace CustomGameModes.GameModes
         /// <returns></returns>
         public bool GoGetPickup(Func<Pickup, bool> predicate, Action onFail)
         {
+            if (MyTargetPickup != null && !NotHasItem(MyTargetPickup.Type)) 
+                return false;
+
+            MyTargetPickup = _claimNearestPickup(predicate);
             if (MyTargetPickup == null)
             {
-                MyTargetPickup = _claimNearestPickup(predicate);
-                if (MyTargetPickup == null)
-                {
-                    onFail();
-                    return false;
-                }
+                onFail();
+                return false;
             }
-            else if (MyTargetPickup.InUse)
-            {
-                if (MyTargetPickup.PreviousOwner == player) return false;
-                MyTargetPickup = null;
-            }
-            return true;
+
+            return NotHasItem(MyTargetPickup.Type);
         }
 
         #endregion
@@ -222,10 +236,11 @@ namespace CustomGameModes.GameModes
         /// <param name="offsetFromCurrent"></param>
         /// <param name="tasks"></param>
         /// <returns></returns>
-        public bool TryGiveCooperativeTasks(uint offsetFromCurrent, params dhasTask[] tasks)
+        public bool TryGiveCooperativeTasks(Player player, uint offsetFromCurrent, params dhasTask[] tasks)
         {
-            if (AlreadyAcceptedCooperativeTasks || DoneAllTasks) return false;
-            AlreadyAcceptedCooperativeTasks = true;
+            if (DoneAllTasks) return false;
+            if (AlreadyAcceptedCooperativeTasks != null && AlreadyAcceptedCooperativeTasks != player) return false;
+            AlreadyAcceptedCooperativeTasks = player;
 
             var insertAt = Math.Min((int)offsetFromCurrent + CurrentTaskNum + 1, tasks.Length - 1);
             Tasks.InsertRange(insertAt, tasks);
@@ -233,9 +248,10 @@ namespace CustomGameModes.GameModes
             return true;
         }
 
-        public List<Player> Teammates => Player.List.Where(p => p.Role.Team != Team.SCPs).ToList();
+        public List<Player> Teammates => Player.List.Where(p => p.Role.Team != Team.SCPs && p != player).ToList();
+        public Player Beast => Player.Get(player => player.Role.Type == RoleTypeId.Scp939).FirstOrDefault();
 
-        protected Player ChooseFarthestPlayer()
+        protected Player GetFarthestTeammate()
         {
             var farthestPlayer = Teammates
                     .OrderByDescending(p => (p.Position - player.Position).magnitude)
@@ -244,11 +260,36 @@ namespace CustomGameModes.GameModes
             return farthestPlayer;
         }
 
+        public Player GetNearestTeammate()
+        {
+            var nearestTeammate = Teammates
+                    .OrderBy(p => (p.Position - player.Position).magnitude)
+                    .FirstOrDefault();
+            if (nearestTeammate == null || nearestTeammate == player) return null;
+            return nearestTeammate;
+        }
+
+        public float DistanceTo(Player p) => (p.Position - player.Position).magnitude;
+        public float DistanceTo(Vector3 vec) => (player.Position - vec).magnitude;
+
+        public bool IsNear(Player p, int distance, out string display)
+        {
+            if (DistanceTo(p) < distance)
+            {
+                display = strong($"<color=green>{distance}m</color>");
+                return true;
+            }
+            display = $"{distance}m";
+            return false;
+        }
+
+        public bool IsNear(Player p, int distance) => IsNear(p, distance, out var _);
+
         #endregion
 
         #region Compass
 
-        protected string GetCompass(UnityEngine.Vector3 to)
+        public string GetCompass(Vector3 to)
         {
             var delta = player.Transform.InverseTransformPoint(to);
             var deltaDir = Math.Atan2(delta.x, delta.z) * 180 / Math.PI;
@@ -287,24 +328,50 @@ namespace CustomGameModes.GameModes
                     combined = combined.Substring(0, i) + target + combined.Substring(i + 1);
                 }
             }
-            var compass = $"{radLeft:03} {combined} {radRight:03}";
+            var compass = $"<{radLeft:03} {combined} {radRight:03}>";
             return compass;
         }
 
-        protected string HotAndCold(UnityEngine.Vector3 to)
+        protected string HotAndCold(Vector3 to)
         {
-            var distance = (player.Position - to).magnitude;
-            return distance switch
+            var distance = (int)DistanceTo(to);
+            var size = distance switch
             {
-                < 10 => "So hot",
-                < 20 => "Hot",
-                < 30 => "Cold",
-                < 40 => "Colder",
-                < 50 => "Really Cold",
-                < 60 => "Freezing",
-                _ => "Arctic Cold",
+                < 1 => 700,
+                < 5 => 400,
+                < 10 => 100,
+                < 15 => 70,
+                < 20 => 50,
+                < 30 => 20,
+                < 40 => 30,
+                < 50 => 40,
+                < 60 => 100,
+                < 70 => 150,
+                < 80 => 200,
+                < 100 => 250,
+                _ => 1,
             };
+
+            var text = distance switch
+            {
+                < 30 => "Hot",
+                < 60 => "Cold",
+                _ => "Freezing",
+            };
+
+            var color = distance switch
+            {
+                < 10 => "red",
+                < 15 => "orange",
+                < 30 => "yellow",
+                < 60 => "cyan",
+                _ => "blue",
+            };
+
+            return strong($"<color={color}><size={size}>{text}</size></color>");
         }
+
+        public string HotAndColdToBeast() => Beast != null ? HotAndCold(Beast.Position) : "No beast...";
 
 
         #endregion
@@ -323,7 +390,10 @@ namespace CustomGameModes.GameModes
             Manager.CanDropItem(type, player);
         }
 
-        protected void CannotDropItem(ItemType item) => Manager.CannotDropItem(item);
+        protected void CannotDropItem(ItemType item) => Manager.CannotDropItem(item, player);
+
+
+        public bool NotHasItem(ItemType type) => NotHasItem(type, out var _);
 
         protected bool NotHasItem(ItemType type, out Item item)
         {
@@ -344,6 +414,36 @@ namespace CustomGameModes.GameModes
 
         #endregion
 
+        #region Timing Task
+
+
+        protected ItemType MyKeycardType;
+        [CrewmateTask(TaskDifficulty.Hard)]
+        protected IEnumerator<float> UpgradeKeycard()
+        {
+            CanUse914();
+            CanDropItem(MyKeycardType);
+
+            while (NotHasItem(ItemType.KeycardO5, out var item))
+            {
+                var compass = player.CurrentRoom.Type != RoomType.Lcz914 ?
+                    GetCompass(Door.Get(DoorType.Scp914Gate).Position) :
+                    "";
+
+                FormatTask("Upgrade Your Keycard", compass);
+                yield return Timing.WaitForSeconds(1);
+            }
+
+            CannotDropItem(MyKeycardType);
+            CannotUse914();
+            // Assuming we have the keycard now
+            ShowTaskCompleteMessage(3);
+            yield return Timing.WaitForSeconds(3);
+        }
+
+        #endregion
+
+
         protected IEnumerable<float> enumerate(IEnumerator<float> iterator)
         {
             while (iterator.MoveNext())
@@ -352,11 +452,23 @@ namespace CustomGameModes.GameModes
             }
         }
 
-        public string TaskSuccessMessage => "<size=40><color=green>Task Complete!</color></size>";
+        public string TaskSuccessMessage => strong("<size=40><color=green>Task Complete!</color></size>");
 
         public string PlayerNameFmt(Player player)
         {
-            return $"<b><color=orange>{player.DisplayNickname}</color></b>";
+            var color = player.Role.Type switch
+            {
+                RoleTypeId.Scientist => "yellow",
+                RoleTypeId.ClassD => "orange",
+                RoleTypeId.NtfCaptain => "blue",
+                _ => "pink",
+            };
+            return strong($"<color={color}>{player.DisplayNickname}</color>");
+        }
+
+        public string strong(string s)
+        {
+            return $"<b>{s}</b>";
         }
     }
 }
