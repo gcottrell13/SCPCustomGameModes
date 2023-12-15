@@ -1,4 +1,5 @@
-﻿using CustomGameModes.GameModes;
+﻿using CustomGameModes.API;
+using CustomGameModes.GameModes;
 using Exiled.API.Features;
 using Exiled.Events.EventArgs.Server;
 using MEC;
@@ -44,11 +45,12 @@ namespace CustomGameModes
             var pool = CustomGameModes.Singleton.Config.GameModes;
 
             GetGame:
-            var game = pool[UnityEngine.Random.Range(0, pool.Count - 1)];
+            var game = pool.RandomChoice();
 
             var games = new Dictionary<string, IGameMode>()
             {
                 { nameof(DogHideAndSeek), new DogHideAndSeek() },
+                { nameof(PeanutRun), new PeanutRun() },
                 { "Normal", new NormalSCPSL() },
             };
 
