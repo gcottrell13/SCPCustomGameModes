@@ -9,7 +9,7 @@ namespace CustomGameModes.GameModes
 {
     internal class NormalSCPSL : IGameMode
     {
-        public void OnRoundEnd(RoundEndedEventArgs ev)
+        public void OnRoundEnd()
         {
         }
 

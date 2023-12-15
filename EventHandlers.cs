@@ -35,6 +35,7 @@ namespace CustomGameModes
 
         private static void WaitingForPlayers()
         {
+            CurrentGame?.OnRoundEnd();
             CurrentGame?.OnWaitingForPlayers();
         }
 
@@ -77,7 +78,7 @@ namespace CustomGameModes
 
         private static void OnRoundEnded(RoundEndedEventArgs @event)
         {
-            CurrentGame?.OnRoundEnd(@event);
+            CurrentGame?.OnRoundEnd();
         }
     }
 }

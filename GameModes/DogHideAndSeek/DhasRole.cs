@@ -3,6 +3,7 @@ using Exiled.API.Features;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
+using Exiled.API.Structs;
 using Exiled.Events.EventArgs.Player;
 using Exiled.Events.Features;
 using MEC;
@@ -35,12 +36,14 @@ namespace CustomGameModes.GameModes
 
         public Pickup MyTargetPickup { get; private set; }
 
+        private List<dhasTask> runningTaskList;
+
         public int CurrentTaskNum { get; private set; }
         public dhasTask CurrentTask { get
             {
                 try
                 {
-                    return Tasks[CurrentTaskNum];
+                    return runningTaskList[CurrentTaskNum];
                 }
                 catch (ArgumentOutOfRangeException)
                 {
@@ -49,7 +52,7 @@ namespace CustomGameModes.GameModes
                 }
             } }
 
-        public bool DoneAllTasks { get; private set; }
+        public bool DoneAllTasks { get; protected set; }
 
         protected bool IsRunning => _runningCoroutine.IsRunning;
 
@@ -59,7 +62,19 @@ namespace CustomGameModes.GameModes
         {
             this.player = player;
             Manager = manager;
+            runningTaskList = Tasks;
         }
+
+        public virtual string CountdownBroadcast => "Releasing the Beast in: ❤";
+        public virtual string MainGameBroadcast => "Do your tasks and Survive!";
+        public virtual string RoundEndBroadcast => "You Win!\nKill The Beast!";
+
+        public virtual void GetPlayerReadyAndEquipped()
+        {
+            var item = player.AddItem(ItemType.Flashlight);
+            player.CurrentItem = item;
+        }
+
 
         /// <summary>
         /// Idempotent Stop
@@ -93,7 +108,7 @@ namespace CustomGameModes.GameModes
 
         private IEnumerator<float> _coroutine()
         {
-            while (CurrentTask != null)
+            while (CurrentTask != null && !DoneAllTasks)
             {
                 // start next task
                 var nextTask = CurrentTask();
@@ -120,6 +135,7 @@ namespace CustomGameModes.GameModes
                         yield return nextTask.Current;
                 }
 
+                MyTargetPickup = null;
                 Manager.OnPlayerCompleteOneTask(player);
 
                 ShowTaskCompleteMessage(3);
@@ -133,12 +149,15 @@ namespace CustomGameModes.GameModes
 
             Dead:
 
-            if (CurrentTaskNum >= Tasks.Count)
-                Manager.OnPlayerCompleteAllTasks(player);
+            if (CurrentTaskNum >= runningTaskList.Count || DoneAllTasks)
+                OnCompleteAllTasks();
+
+            Log.Debug($"Player {player.DisplayNickname} - Role coroutine completed");
         }
 
+        public virtual void OnCompleteAllTasks() => Manager.OnPlayerCompleteAllTasks(player);
 
-        public void ShowTaskCompleteMessage(float duration)
+        public virtual void ShowTaskCompleteMessage(float duration)
         {
             var d = taskDifficulty.DifficultyTime();
 
@@ -175,7 +194,11 @@ namespace CustomGameModes.GameModes
 
         private Pickup _claimNearestPickup(Func<Pickup, bool> predicate)
         {
-            var inZone = Pickup.List.Where(p => p.Room?.Zone == player.CurrentRoom?.Zone);
+            var inZone = Pickup.List.Where(
+                p => p.Room?.Zone == player.CurrentRoom?.Zone
+                && p.Room.Type != RoomType.Lcz914
+                && p.Room.Type != RoomType.LczPlants
+            );
             var validPickups = new List<Pickup>();
 
             foreach (var pickup in inZone)
@@ -236,20 +259,26 @@ namespace CustomGameModes.GameModes
         /// <param name="offsetFromCurrent"></param>
         /// <param name="tasks"></param>
         /// <returns></returns>
-        public bool TryGiveCooperativeTasks(Player player, uint offsetFromCurrent, params dhasTask[] tasks)
+        public bool TryGiveCooperativeTasks(Player friend, uint offsetFromCurrent, params dhasTask[] tasks)
         {
             if (DoneAllTasks) return false;
-            if (AlreadyAcceptedCooperativeTasks != null && AlreadyAcceptedCooperativeTasks != player) return false;
-            AlreadyAcceptedCooperativeTasks = player;
+            if (AlreadyAcceptedCooperativeTasks != null && AlreadyAcceptedCooperativeTasks != friend) return false;
+            AlreadyAcceptedCooperativeTasks = friend;
 
-            var insertAt = Math.Min((int)offsetFromCurrent + CurrentTaskNum + 1, tasks.Length - 1);
-            Tasks.InsertRange(insertAt, tasks);
+            var insertAt = Math.Min((int)offsetFromCurrent + CurrentTaskNum + 1, runningTaskList.Count - 1);
+            runningTaskList.InsertRange(insertAt, tasks);
+
+            Log.Debug($"{player.DisplayNickname} accepted a task from {friend.DisplayNickname}. Current Task: {CurrentTaskNum} - new task scheduled for {insertAt}");
 
             return true;
         }
 
-        public List<Player> Teammates => Player.List.Where(p => p.Role.Team != Team.SCPs && p != player).ToList();
-        public Player Beast => Player.Get(player => player.Role.Type == RoleTypeId.Scp939).FirstOrDefault();
+        public List<Player> Teammates => Manager.Humans()
+            .Where(r => r.player != player)
+            .Select(r => r.player)
+            .ToList();
+
+        public Player Beast => Manager.Beast().FirstOrDefault()?.player;
 
         protected Player GetFarthestTeammate()
         {
@@ -337,7 +366,7 @@ namespace CustomGameModes.GameModes
             var distance = (int)DistanceTo(to);
             var size = distance switch
             {
-                < 1 => 700,
+                < 1 => 500,
                 < 5 => 400,
                 < 10 => 100,
                 < 15 => 70,
@@ -349,14 +378,17 @@ namespace CustomGameModes.GameModes
                 < 70 => 150,
                 < 80 => 200,
                 < 100 => 250,
-                _ => 1,
+                _ => 500,
             };
 
             var text = distance switch
             {
-                < 30 => "Hot",
-                < 60 => "Cold",
-                _ => "Freezing",
+                < 5 => "HOT",
+                < 20 => "Hotter!",
+                < 30 => "Lukewarm",
+                < 60 => "Colder",
+                < 100 => "Freezing",
+                _ => "Really Far",
             };
 
             var color = distance switch
@@ -364,7 +396,7 @@ namespace CustomGameModes.GameModes
                 < 10 => "red",
                 < 15 => "orange",
                 < 30 => "yellow",
-                < 60 => "cyan",
+                < 60 => "blue",
                 _ => "blue",
             };
 
@@ -412,6 +444,16 @@ namespace CustomGameModes.GameModes
             return item;
         }
 
+        protected Item EnsureFirearm(FirearmType type, params AttachmentIdentifier[] attachments)
+        {
+            var item = player.Items.FirstOrDefault(item => (item as Firearm).FirearmType == type);
+            if (item == null)
+            {
+                return player.AddItem(type, attachments);
+            }
+            return item;
+        }
+
         #endregion
 
         #region Timing Task
@@ -436,9 +478,6 @@ namespace CustomGameModes.GameModes
 
             CannotDropItem(MyKeycardType);
             CannotUse914();
-            // Assuming we have the keycard now
-            ShowTaskCompleteMessage(3);
-            yield return Timing.WaitForSeconds(3);
         }
 
         #endregion

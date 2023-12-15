@@ -77,7 +77,9 @@ namespace CustomGameModes.GameModes
             // First Fetch
             bool predicate(Pickup pickup) => pickup.Type.IsScp();
             void onFail() { player.AddItem(ItemType.SCP207); }
-            ItemType scp = ItemType.SCP207;
+            ItemType scp = 0;
+
+            Log.Debug("SCIENTIST SCP 1");
 
             while (GoGetPickup(predicate, onFail) && MyTargetPickup != null)
             {
@@ -89,26 +91,32 @@ namespace CustomGameModes.GameModes
 
             // Then Use
 
-            usedItem = false;
-            CanDropItem(scp);
-            targetSCP = scp;
-            SCP1 = scp;
-
-            PlayerEvent.DroppedItem += dropped;
-            PlayerEvent.ThrownProjectile += thrown;
-            PlayerEvent.UsedItem += used;
-
-            while (!usedItem)
+            if (scp != 0)
             {
-                FormatTask($"Use {strong(scp.ToString())}", "");
-                yield return Timing.WaitForSeconds(1);
+                usedItem = false;
+                CanDropItem(scp);
+                targetSCP = scp;
+                SCP1 = scp;
+
+                PlayerEvent.DroppedItem += dropped;
+                PlayerEvent.ThrownProjectile += thrown;
+                PlayerEvent.UsedItem += used;
+
+                while (!usedItem)
+                {
+                    FormatTask($"Use {strong(scp.ToString())}", "");
+                    yield return Timing.WaitForSeconds(1);
+                }
+
+                PlayerEvent.DroppedItem -= dropped;
+                PlayerEvent.ThrownProjectile -= thrown;
+                PlayerEvent.UsedItem -= used;
+
+                CannotDropItem(scp);
             }
+            else
+                Log.Warn($"No SCP found for scientist");
 
-            PlayerEvent.DroppedItem -= dropped;
-            PlayerEvent.ThrownProjectile -= thrown;
-            PlayerEvent.UsedItem -= used;
-
-            CannotDropItem(scp);
         }
 
         [CrewmateTask(TaskDifficulty.Medium)]
@@ -116,7 +124,9 @@ namespace CustomGameModes.GameModes
         {
             bool predicate(Pickup pickup) => pickup.Type.IsScp() && pickup.Type != SCP1;
             void onFail() { player.AddItem(ItemType.AntiSCP207); }
-            ItemType scp = ItemType.AntiSCP207;
+            ItemType scp = 0;
+
+            Log.Debug("SCIENTIST SCP 2");
 
             while (GoGetPickup(predicate, onFail) && MyTargetPickup != null)
             {
@@ -128,26 +138,31 @@ namespace CustomGameModes.GameModes
 
             // Then Use
 
-            usedItem = false;
-            CanDropItem(scp);
-            targetSCP = scp;
-            SCP2 = scp;
-
-            PlayerEvent.DroppedItem += dropped;
-            PlayerEvent.ThrownProjectile += thrown;
-            PlayerEvent.UsedItem += used;
-
-            while (!usedItem)
+            if (scp != 0)
             {
-                FormatTask($"Use {strong(scp.ToString())}", "");
-                yield return Timing.WaitForSeconds(1);
+                usedItem = false;
+                CanDropItem(scp);
+                targetSCP = scp;
+                SCP1 = scp;
+
+                PlayerEvent.DroppedItem += dropped;
+                PlayerEvent.ThrownProjectile += thrown;
+                PlayerEvent.UsedItem += used;
+
+                while (!usedItem)
+                {
+                    FormatTask($"Use {strong(scp.ToString())}", "");
+                    yield return Timing.WaitForSeconds(1);
+                }
+
+                PlayerEvent.DroppedItem -= dropped;
+                PlayerEvent.ThrownProjectile -= thrown;
+                PlayerEvent.UsedItem -= used;
+
+                CannotDropItem(scp);
             }
-
-            PlayerEvent.DroppedItem -= dropped;
-            PlayerEvent.ThrownProjectile -= thrown;
-            PlayerEvent.UsedItem -= used;
-
-            CannotDropItem(scp);
+            else
+                Log.Warn($"No SCP found for scientist");
         }
 
         bool playerEv(IPlayerEvent ev) => ev.Player == player;

@@ -47,6 +47,7 @@ namespace CustomGameModes.GameModes
 
             RoleDistribution = new[]
             {
+                BeastRole.name,
                 A[0],
                 A[1],
                 DhasRoleGuardian.name,
@@ -71,6 +72,7 @@ namespace CustomGameModes.GameModes
             {DhasRoleDaredevil.name, (player) => new DhasRoleDaredevil(player, this) },
             {DhasRoleMadman.name, (player) => new DhasRoleMadman(player, this) },
             {DhasRoleScientist.name, (player) => new DhasRoleScientist(player, this) },
+            {BeastRole.name, (player) => new BeastRole(player, this) },
         };
 
         public DhasRole ApplyRoleToPlayer(Player player, string name)
@@ -78,14 +80,12 @@ namespace CustomGameModes.GameModes
             if (PlayerRoles.TryGetValue(player, out var existingRole))
             {
                 existingRole.Stop();
+                ActiveRoles.Remove(existingRole);
             }
 
-            player.ClearInventory();
-
-            var item = player.AddItem(ItemType.Flashlight);
-            player.CurrentItem = item;
-
             var role = RoleClasses()[name](player);
+            player.ClearInventory();
+            role.GetPlayerReadyAndEquipped();
 
             ActiveRoles.Add(role);
             PlayerRoles[player] = role;
@@ -107,6 +107,15 @@ namespace CustomGameModes.GameModes
                 role.Start();
             }
         }
+
+        public List<DhasRole> Humans() => ActiveRoles.Where(role => role.RoleType().GetTeam() switch
+        {
+            Team.SCPs => false,
+            Team.Dead => false,
+            _ => true,
+        }).ToList();
+
+        public List<DhasRole> Beast() => ActiveRoles.Where(role => role.RoleType() == RoleTypeId.Scp939).ToList();
 
         public void OnRemoveTime(int seconds) => RemovingTime?.Invoke(seconds);
 

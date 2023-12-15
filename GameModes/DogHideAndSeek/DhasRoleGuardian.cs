@@ -23,6 +23,8 @@ namespace CustomGameModes.GameModes
         public override RoleTypeId RoleType() => RoleTypeId.Scientist;
         private RoleTypeId _escapedRole = RoleTypeId.NtfCaptain;
 
+        public int RemainingLives;
+
         public override List<dhasTask> Tasks => new()
         {
             GetAKeycard,
@@ -114,7 +116,10 @@ namespace CustomGameModes.GameModes
 
             while (IsRunning)
             {
-                FormatTask("Protect your Teammates", "");
+                FormatTask($"""
+                    Protect your Teammates
+                    Remaining Lives: {RemainingLives}
+                    """, "");
                 yield return Timing.WaitForSeconds(1);
             }
             Manager.ClearPlayerAllowedDoors(player);
@@ -127,15 +132,20 @@ namespace CustomGameModes.GameModes
         {
             if (ev.Player.Role.Team == Team.SCPs && ev.Attacker == player)
             {
-                ev.Player.EnableEffect(EffectType.SinkHole, duration: 1f);
+                ev.Player.EnableEffect(EffectType.SinkHole, duration: 2f);
             }
         }
 
         private void OnDied(DiedEventArgs ev)
         {
+            RemainingLives--;
+
+            if (RemainingLives == 0) return;
+
             ev.Player.Role.Set(_escapedRole, RoleSpawnFlags.None);
             player.AddAmmo(AmmoType.Nato556, 50);
-            EnsureItem(ItemType.GunE11SR);
+            player.CurrentItem = EnsureFirearm(FirearmType.E11SR);
+            EnsureItem(ItemType.Flashlight);
             player.Position = GetFarthestTeammate()?.Position 
                 ?? ev.Attacker?.Position 
                 ?? SpawnLocationType.Inside173Bottom.GetPosition() + UnityEngine.Vector3.up;

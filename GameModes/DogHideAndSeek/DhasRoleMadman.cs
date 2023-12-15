@@ -61,20 +61,38 @@ namespace CustomGameModes.GameModes
         [CrewmateTask(TaskDifficulty.Easy)]
         private IEnumerator<float> AskForKeycard()
         {
-            Teammates.Pool(teammate =>
+            GetFriend:
+
+            Friend = Teammates.Pool(teammate =>
             {
-                Friend = teammate;
-                FriendRole = Manager.PlayerRoles[Friend];
-                if (!FriendRole.TryGiveCooperativeTasks(player, 1, GetRandomKeycard))
+                var friendrole = Manager.PlayerRoles[teammate];
+                if (!friendrole.TryGiveCooperativeTasks(player, 1, GetRandomKeycard))
                     return false;
-                FriendRole.TryGiveCooperativeTasks(player, 3, FindMadman);
+                friendrole.TryGiveCooperativeTasks(player, 4, FindMadman);
+                Log.Debug($"Gave 2 tasks to friend {teammate.DisplayNickname}");
                 return true;
             });
+            
+            if (Friend == null)
+            {
+                player.ShowHint("Searching for a friend...");
+                yield return Timing.WaitForSeconds(1);
+                goto GetFriend;
+            }
 
-            while (friendPickup == null || NotHasItem(friendPickup.Type, out var item))
+            FriendRole = Manager.PlayerRoles[Friend];
+
+            while (keycardFriendPickup == null)
             {
                 var compass = HotAndCold(Friend.Position);
                 FormatTask($"Go get a keycard from {PlayerNameFmt(Friend)}.", compass);
+                yield return Timing.WaitForSeconds(0.5f);
+            }
+
+            while (NotHasItem(keycardFriendPickup.Type, out var item))
+            {
+                var compass = GetCompass(keycardFriendPickup.Position);
+                FormatTask($"Get the keycard that {PlayerNameFmt(Friend)} dropped for you.", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
         }
@@ -87,13 +105,12 @@ namespace CustomGameModes.GameModes
             Step = step;
             Cube = CUBE;
 
-
             PlayerEvent.InteractingDoor += InteractDoor;
 
-            while (!doorOpened)
+            while (!doorOpened && DistanceTo(Cube.Position) > 7)
             {
                 var compass = GetCompass(CUBE.Position);
-                FormatTask("Go to THE CUBE", compass);
+                FormatTask("Go to THE CUBE in PT-01", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
 
@@ -104,63 +121,74 @@ namespace CustomGameModes.GameModes
         [CrewmateTask(TaskDifficulty.Easy)]
         private IEnumerator<float> StandOnCube()
         {
-            var mustRunSeconds = 20;
-            var timeElapsed = 0;
+            var timesPerSecond = 2f;
+            var mustRunSeconds = 20f * timesPerSecond;
+            var timeElapsed = 0f;
 
             void hint()
             {
+                var d = (int)((mustRunSeconds - timeElapsed) / timesPerSecond);
                 if (timeElapsed == 0f)
-                    FormatTask($"Stand on CUBE for\n{mustRunSeconds} seconds", "");
+                    FormatTask($"Stand on CUBE for\n{d} seconds", "");
                 else
-                    FormatTask($"Stand on CUBE for an additional\n{mustRunSeconds - timeElapsed} seconds", "");
+                    FormatTask($"Stand on CUBE for an additional\n{d} seconds", "");
             }
 
             bool predicate()
             {
                 var in173 = player.CurrentRoom.RoomName == MapGeneration.RoomName.Lcz173;
-                var onCube = player.Position.y > 13;
+                var onCube = player.Position.y > 12;
                 return in173 && onCube;
             }
 
+            Cube.Position = new(Cube.Position.x, 12f, Cube.Position.z);
+
             while (timeElapsed < mustRunSeconds)
             {
-                if (player.Position.y >= Cube.Position.y + 1)
+                if (player.Position.y >= 13.4)
                 {
                     timeElapsed += 1;
-                    Cube.Rotation = Quaternion.AngleAxis(timeElapsed * 180, Vector3.up);
+                    Cube.Rotation = Quaternion.AngleAxis(timeElapsed / timesPerSecond * 90, Vector3.up);
                 }
 
-                if (player.Position.y < Cube.Position.y + 0.75)
-                    Step.Position = new(Step.Position.x, Cube.Position.y, Step.Position.z);
+                if (player.Position.y < 14)
+                    Step.Position = new(Step.Position.x, 11.75f, Step.Position.z);
                 else
                     Step.Position = new(Step.Position.x, 10f, Step.Position.z);
-                if ((Beast.Position - player.Position).magnitude < 10)
+                if (Beast != null && IsNear(Beast, 10))
                 {
                     closeEncounterNearCube = true;
                 }
                 hint();
 
-                yield return Timing.WaitForSeconds(1);
+                yield return Timing.WaitForSeconds(1 / timesPerSecond);
             }
         }
 
-        [CrewmateTask(TaskDifficulty.Easy)]
+        [CrewmateTask(TaskDifficulty.Medium)]
         private IEnumerator<float> GetMauled()
         {
             var thingToDieFor = ThingsToDieFor.RandomChoice();
+
+            if (Beast == null) goto Done;
 
             PlayerEvent.Dying += killed;
 
             if (closeEncounterNearCube)
             {
-                player.ShowHint("That was a close one, right?");
+                player.ShowHint("That was a close one, right?", 7);
                 yield return Timing.WaitForSeconds(7);
 
                 if ((Beast.Position - player.Position).magnitude > 20)
                 {
-                    player.ShowHint("Well, absence does make the heart grow fonder.");
+                    player.ShowHint("Well, absence does make the heart grow fonder.", 7);
                     yield return Timing.WaitForSeconds(7);
                 }
+            }
+            else
+            {
+                player.ShowHint("You know what I was thinking?\nThat Beast looks pretty friendly!", 7);
+                yield return Timing.WaitForSeconds(7);
             }
 
             while (!worthIt)
@@ -170,6 +198,9 @@ namespace CustomGameModes.GameModes
             }
 
             PlayerEvent.Dying -= killed;
+            DoneAllTasks = true;
+
+            Done:
 
             ShowTaskCompleteMessage(30);
             yield return Timing.WaitForSeconds(30);
@@ -179,7 +210,7 @@ namespace CustomGameModes.GameModes
 
         void killed(DyingEventArgs ev)
         {
-            if (ev.Attacker?.Role.Type == RoleTypeId.Scp939)
+            if (ev.Attacker?.Role.Team == Team.SCPs)
             {
                 worthIt = true;
             }
@@ -194,6 +225,15 @@ namespace CustomGameModes.GameModes
             {
                 doorOpened = true;
                 ev.Door.IsOpen = true;
+            }
+        }
+
+        Pickup keycardFriendPickup;
+        void OnDroppedItem(DroppedItemEventArgs ev)
+        {
+            if (keycardFriendPickup == null && ev.Player == Friend && ev.Pickup.Type == friendPickup.Type)
+            {
+                keycardFriendPickup = ev.Pickup;
             }
         }
 
@@ -224,34 +264,27 @@ namespace CustomGameModes.GameModes
         {
             var myName = PlayerNameFmt(player);
 
-            while ((player.Position - Friend.Position).magnitude > 5)
+            while (!FriendRole.IsNear(player, 5, out var dm))
             {
                 var compass = FriendRole.GetCompass(player.Position);
-                FormatTask($"Be Within 5m of {myName}", compass);
+                FriendRole.FormatTask($"Be Within {dm} of {myName}", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
 
-            FormatTask($"Tell {myName}:\nI can tell you're going through a hard time right now.\nIt's OK, I'm here for you.", "");
+            Friend.ShowHint($"Tell {myName}:\nI can tell you're going through a hard time right now.\nIt's OK, I'm here for you.", 15f);
             yield return Timing.WaitForSeconds(15f);
 
             Manager.CanDropItem(friendPickup.Type, Friend);
 
-            var dropped = false;
-            void OnDroppedItem(DroppedItemEventArgs ev)
-            {
-                if (dropped == false && ev.Player == Friend && ev.Pickup.Type == friendPickup.Type)
-                {
-                    dropped = true;
-                }
-            }
-
             PlayerEvent.DroppedItem += OnDroppedItem;
 
-            while (!dropped)
+            while (keycardFriendPickup == null)
             {
-                FormatTask($"Drop the {friendPickup.Type} for {myName}", "");
+                FriendRole.FormatTask($"Drop the {friendPickup.Type} for {myName}", "");
                 yield return Timing.WaitForSeconds(1);
             }
+
+            Manager.ClaimedPickups[keycardFriendPickup] = player;
 
             PlayerEvent.DroppedItem -= OnDroppedItem;
 

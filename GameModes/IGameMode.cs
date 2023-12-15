@@ -10,7 +10,7 @@ namespace CustomGameModes.GameModes
     internal interface IGameMode
     {
         void OnRoundStart();
-        void OnRoundEnd(RoundEndedEventArgs ev);
+        void OnRoundEnd();
 
         void OnWaitingForPlayers();
     }

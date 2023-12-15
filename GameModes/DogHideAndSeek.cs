@@ -35,10 +35,11 @@ namespace CustomGameModes.GameModes
         bool beastReleased;
         bool classDWin = false;
         List<Door> LCZDoors = new();
-        Player beast;
-        List<Player> ClassD = new();
         public static DhasRoleManager Manager;
         bool cassieBeastEscaped = false;
+
+        List<Door> DoorsLockedExceptToRole = new();
+        HashSet<Door> DoorsReopenAfterClosing = new();
 
         CoroutineHandle roundHandlerCO;
 
@@ -75,8 +76,10 @@ namespace CustomGameModes.GameModes
             roundHandlerCO = Timing.RunCoroutine(_wrapRoundHandle());
         }
 
-        public void OnRoundEnd(RoundEndedEventArgs ev)
+        public void OnRoundEnd()
         {
+            Log.Info("Stopping Game");
+
             // -------------------------------------------------------------
             // Event Handlers
             // -------------------------------------------------------------
@@ -122,7 +125,7 @@ namespace CustomGameModes.GameModes
 
         private void PlayerDamagingWindow(DamagingWindowEventArgs e)
         {
-            if (e.Player.Role.Team == PlayerRoles.Team.SCPs && beastReleased)
+            if (e.Player.Role.Team == Team.SCPs && beastReleased)
             {
                 if (!cassieBeastEscaped)
                 {
@@ -176,22 +179,24 @@ namespace CustomGameModes.GameModes
         private void OnInteractDoor(InteractingDoorEventArgs ev)
         {
             if (Manager == null) { ev.IsAllowed = false; return; }
-            if (Manager.DoorsToOpen.TryGetValue(ev.Door, out var assignedPlayers) && assignedPlayers.Contains(ev.Player))
+            if (DoorsLockedExceptToRole.Contains(ev.Door))
             {
-                // allow it
+                if (Manager.DoorsToOpen.TryGetValue(ev.Door, out var assignedPlayers) && assignedPlayers.Contains(ev.Player))
+                {
+                    // allow it
+                }
+                else
+                {
+                    ev.IsAllowed = false;
+                }
+            }
+            else if (ev.Door == beastDoor || ev.Door.Zone != ZoneType.LightContainment)
+            {
+                ev.IsAllowed = false;
             }
             else
             {
-                var allowedToggle = ev.Door.Type switch
-                {
-                    DoorType.Airlock => true,
-                    DoorType.LczArmory => true,
-                    DoorType.LczWc => true,
-                    DoorType.LczCafe => true,
-                    _ => false,
-                };
-
-                if (!allowedToggle)
+                if (DoorsReopenAfterClosing.Contains(ev.Door) && ev.Door.IsOpen)
                 {
                     Timing.CallDelayed(2f, () =>
                     {
@@ -207,7 +212,7 @@ namespace CustomGameModes.GameModes
             // disallow the beast to hurt the Class-D after it loses
             if (classDWin)
             {
-                if (ev.Attacker?.Role.Team == PlayerRoles.Team.SCPs)
+                if (ev.Attacker?.Role.Team == Team.SCPs)
                 {
                     ev.IsAllowed = false;
                 }
@@ -218,7 +223,7 @@ namespace CustomGameModes.GameModes
             }
             else
             {
-                if (ev.Attacker?.Role.Team == PlayerRoles.Team.ClassD)
+                if (ev.Attacker?.Role.Team == Team.ClassD)
                 {
                     ev.IsAllowed = false;
                 }
@@ -304,31 +309,37 @@ namespace CustomGameModes.GameModes
 
             LCZDoors = Door.Get(door => door.Zone == ZoneType.LightContainment).ToList();
 
-            beastDoor = Room.Get(RoomType.LczGlassBox).Doors.First(d => d.Rooms.Count == 1 && d.IsGate);
-            var innerGR18Door = Room.Get(RoomType.LczGlassBox).Doors.First(d => d.Rooms.Count == 1 && !d.IsGate);
+            beastDoor = Room.Get(RoomType.LczGlassBox).Doors.First(d => d.Rooms.Count == 1 && !d.IsGate);
 
             var doorsDoNotOpen = new HashSet<Door>()
             {
                 Room.Get(RoomType.Lcz173).Doors.First(d => d.IsGate),
                 Room.Get(RoomType.LczArmory).Doors.First(d => d.Rooms.Count == 1),
                 Door.Get(DoorType.CheckpointLczA),
-                Door.Get(DoorType.CheckpointLczA),
                 Door.Get(DoorType.CheckpointLczB),
-                innerGR18Door,
+                beastDoor,
             };
 
             foreach (var door in LCZDoors)
             {
                 if (door.Rooms.Count == 1 && door.Room.RoomName == MapGeneration.RoomName.LczCheckpointA) doorsDoNotOpen.Add(door);
                 if (door.Rooms.Count == 1 && door.Room.RoomName == MapGeneration.RoomName.LczCheckpointB) doorsDoNotOpen.Add(door);
+                if (door.Rooms.Count == 2 && door.DoorLockType == DoorLockType.None) DoorsReopenAfterClosing.Add(door);
             }
+
+            DoorsLockedExceptToRole.Add(Door.Get(DoorType.CheckpointLczA));
+            DoorsLockedExceptToRole.Add(Door.Get(DoorType.CheckpointLczB));
+            DoorsLockedExceptToRole.AddRange(Room.Get(RoomType.Lcz173).Doors.Where(d => d.IsGate));
+            DoorsLockedExceptToRole.Add(Room.Get(RoomType.Lcz914).Doors.First(d => d.IsGate));
 
             foreach (var lczdoor in LCZDoors)
             {
-                if (!doorsDoNotOpen.Contains(lczdoor))
-                    lczdoor.IsOpen = true;
-                else
-                    lczdoor.IsOpen = false;
+                lczdoor.IsOpen = !doorsDoNotOpen.Contains(lczdoor);
+            }
+
+            foreach (var shouldBeClosed in doorsDoNotOpen)
+            {
+                shouldBeClosed.IsOpen = false;
             }
 
             #endregion
@@ -341,24 +352,7 @@ namespace CustomGameModes.GameModes
             while (iterator < players.Count)
             {
                 var player = players[iterator];
-
-                if (iterator == 0)
-                {
-                    player.Role.Set(PlayerRoles.RoleTypeId.Scp939);
-                    var doorDelta = beastDoor.Position - innerGR18Door.Position;
-                    Vector3 box;
-                    if (Math.Abs(doorDelta.x) > Math.Abs(doorDelta.z))
-                        box = new Vector3(beastDoor.Position.x - doorDelta.x, beastDoor.Position.y + 1, beastDoor.Position.z);
-                    else
-                        box = new Vector3(beastDoor.Position.x, beastDoor.Position.y + 1, beastDoor.Position.z - doorDelta.z);
-                    player.Position = box;
-                    beast = player;
-                }
-                else
-                {
-                    Manager.ApplyRoleToPlayer(player, roles[iterator-1]);
-                    ClassD.Add(player);
-                }
+                Manager.ApplyRoleToPlayer(player, roles[iterator]);
                 iterator++;
             }
 
@@ -371,7 +365,7 @@ namespace CustomGameModes.GameModes
 
             // turn off all the lights in each room except for those that have players in them
             {
-                var playerRooms = ClassD.Select(player => player.CurrentRoom);
+                var playerRooms = Manager.Humans().Select(role => role.player.CurrentRoom);
                 foreach (var room in Room.Get(ZoneType.LightContainment))
                 {
                     if (playerRooms.Contains(room)) continue;
@@ -386,18 +380,15 @@ namespace CustomGameModes.GameModes
             var timerTotalSeconds = CountdownTime;
             var timerStartedTime = DateTime.Now;
 
-            var classDMessage = classDMessageWaiting;
-            var beastMessage = beastMessageWaiting;
+            var getBroadcast = (DhasRole p) => p.CountdownBroadcast;
+
             void removeTime(int seconds)
             {
                 var elapsed = (int)(DateTime.Now - timerStartedTime).TotalSeconds;
                 timerTotalSeconds -= seconds;
                 var remainingSeconds = timerTotalSeconds - elapsed;
-                foreach (var dclass in ClassD)
-                {
-                    CountdownHelper.AddCountdown(dclass, classDMessage, TimeSpan.FromSeconds(remainingSeconds));
-                }
-                CountdownHelper.AddCountdown(beast, beastMessage, TimeSpan.FromSeconds(remainingSeconds));
+                foreach (var playerRole in Manager.ActiveRoles)
+                    CountdownHelper.AddCountdown(playerRole.player, getBroadcast(playerRole), TimeSpan.FromSeconds(remainingSeconds));
             }
 
             Manager.StartAll();
@@ -413,10 +404,11 @@ namespace CustomGameModes.GameModes
             beastReleased = true;
             timerTotalSeconds = RoundTime;
             timerStartedTime = DateTime.Now;
-            classDMessage = classDMessageActive;
-            beastMessage = beastMessageActive;
+            getBroadcast = (p) => p.MainGameBroadcast;
 
-            beast.ShowHint("Break Free", 5);
+            foreach (var beast in Manager.Beast())
+                beast.player.ShowHint("Break Free", 7);
+
             removeTime(0);
             while ((DateTime.Now - timerStartedTime).TotalSeconds < timerTotalSeconds) yield return Timing.WaitForSeconds(1);
 
@@ -435,6 +427,8 @@ namespace CustomGameModes.GameModes
 
             Cassie.MessageTranslated("The Class D Are Successful", "Class-D Win!");
 
+            Manager.StopAll();
+
             foreach (var classD in Player.List.Where(x => x.Role.Team switch
             {
                 Team.Dead => false,
@@ -445,30 +439,26 @@ namespace CustomGameModes.GameModes
                 classDWin = true;
                 var item = classD.AddItem(ItemType.MicroHID);
                 classD.CurrentItem = item;
-                CountdownHelper.AddCountdown(classD, "Class-D Win!\nKill The Beast!", TimeSpan.FromSeconds(EndOfRoundTime));
             }
 
-            CountdownHelper.AddCountdown(beast, "End Of Round", TimeSpan.FromSeconds(EndOfRoundTime));
+            foreach (var dclass in Manager.ActiveRoles)
+                CountdownHelper.AddCountdown(dclass.player, dclass.RoundEndBroadcast, TimeSpan.FromSeconds(EndOfRoundTime));
+
             yield return Timing.WaitForSeconds(EndOfRoundTime);
 
-            beast.Hurt(-1);
+            foreach (var beast in Manager.Beast()) 
+                beast.player.Hurt(-1);
             // ----------------------------------------------------------------------------------------------------------------
             // ----------------------------------------------------------------------------------------------------------------
         }
 
         #endregion
 
-        private static string classDMessageWaiting = "Releasing the Beast in: ❤";
-        private static string beastMessageWaiting = "The Class-D are hiding!\nYou will be released in:";
-        private static string classDMessageActive = "Do your tasks and Survive!";
-        private static string beastMessageActive = "Kill Everyone!";
-
-
         private void onPlayerRoleDied(Player ev)
         {
-            var playerDeadCount = Player.List.Where(p => p.Role.Type == PlayerRoles.RoleTypeId.Spectator).Count();
+            var playerDeadCount = Manager.Humans().Count();
             Cassie.Clear();
-            Cassie.DelayedMessage($"{playerDeadCount} personnal are dead", 3f);
+            Cassie.DelayedMessage($"{playerDeadCount} personnel are dead", 3f, isNoisy: false);
         }
 
         private void onPlayerCompleteAllTasks(Player ev)
