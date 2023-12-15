@@ -4,6 +4,7 @@ using Exiled.API.Features;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
+using Exiled.Events.EventArgs.Interfaces;
 using Exiled.Events.EventArgs.Player;
 using MEC;
 using PlayerRoles;
@@ -12,6 +13,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using UnityEngine;
 using PlayerEvent = Exiled.Events.Handlers.Player;
 
 namespace CustomGameModes.GameModes
@@ -22,13 +24,17 @@ namespace CustomGameModes.GameModes
 
         private List<Door> ClassDDoorsTouched = new();
 
+        private HashSet<Room> GhostlightsThrown = new();
+
         public override RoleTypeId RoleType() => RoleTypeId.ClassD;
+
+        bool givingGhostlight = false;
 
         public override List<dhasTask> Tasks => new()
         {
             TouchAllClassDDoors,
+            ThrowGhostlights,
             NoFlashlight,
-            Run,
             BeNearBeast,
         };
 
@@ -46,6 +52,11 @@ namespace CustomGameModes.GameModes
             {
                 PlayerEvent.InteractingDoor -= doorTouch;
             }
+            if (CurrentTask == ThrowGhostlights)
+            {
+                PlayerEvent.UsedItem -= ghostlightUse;
+                PlayerEvent.ThrownProjectile -= ghostlightUse;
+            }
         }
 
         private void doorTouch(InteractingDoorEventArgs e)
@@ -57,6 +68,30 @@ namespace CustomGameModes.GameModes
                 ClassDDoorsTouched.Add(e.Door);
             }
         }
+
+        private void ghostlightUse(IItemEvent e)
+        {
+            if (CurrentTask == ThrowGhostlights && e is IPlayerEvent pe)
+            {
+                if (e.Item.Type != ItemType.SCP2176 || pe.Player != player) return;
+                if (e is IPickupEvent pickupEvent && pickupEvent.Pickup.Room.Type == RoomType.Lcz330 && e is IDeniableEvent d) {
+                    d.IsAllowed = false;
+                    return;
+                }
+
+                GhostlightsThrown.Add(player.CurrentRoom);
+                if (!givingGhostlight)
+                {
+                    givingGhostlight = true;
+                    Timing.CallDelayed(4f, () =>
+                    {
+                        givingGhostlight = false;
+                        player.CurrentItem = player.AddItem(ItemType.SCP2176);
+                    });
+                }
+            }
+        }
+
 
         [CrewmateTask(TaskDifficulty.Medium)]
         private IEnumerator<float> TouchAllClassDDoors()
@@ -106,26 +141,23 @@ namespace CustomGameModes.GameModes
         }
 
         [CrewmateTask(TaskDifficulty.Easy)]
-        private IEnumerator<float> Run()
+        private IEnumerator<float> ThrowGhostlights()
         {
-            var mustRunSeconds = 30f;
-            var timeElapsed = 0f;
+            var requiredRoomCount = 10;
+            player.CurrentItem = player.AddItem(ItemType.SCP2176);
 
-            void hint()
-            {
-                if (timeElapsed == 0f)
-                    FormatTask($"Run for {mustRunSeconds} seconds", "");
-                else
-                    FormatTask($"Run for an additional {mustRunSeconds - timeElapsed} seconds", "");
-            }
-            bool predicate() => player.IsUsingStamina;
+            PlayerEvent.UsedItem += ghostlightUse;
+            PlayerEvent.ThrownProjectile += ghostlightUse;
 
-            while (timeElapsed < mustRunSeconds)
+            while (GhostlightsThrown.Count < requiredRoomCount)
             {
-                if (predicate()) timeElapsed += 0.5f;
-                hint();
-                yield return Timing.WaitForSeconds(0.5f);
+                var diff = requiredRoomCount - GhostlightsThrown.Count;
+                FormatTask($"Throw scp2176 in {strong(diff)} Unique rooms", "");
+                yield return Timing.WaitForSeconds(1);
             }
+
+            PlayerEvent.UsedItem -= ghostlightUse;
+            PlayerEvent.ThrownProjectile -= ghostlightUse;
         }
 
         [CrewmateTask(TaskDifficulty.Hard)]

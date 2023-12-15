@@ -61,9 +61,9 @@ namespace CustomGameModes.GameModes
         [CrewmateTask(TaskDifficulty.Easy)]
         private IEnumerator<float> AskForKeycard()
         {
-            GetFriend:
+        GetFriend:
 
-            Friend = Teammates.Pool(teammate =>
+            Friend = OtherCrewmates.Pool(teammate =>
             {
                 var friendrole = Manager.PlayerRoles[teammate];
                 if (!friendrole.TryGiveCooperativeTasks(player, 1, GetRandomKeycard))
@@ -72,7 +72,7 @@ namespace CustomGameModes.GameModes
                 Log.Debug($"Gave 2 tasks to friend {teammate.DisplayNickname}");
                 return true;
             });
-            
+
             if (Friend == null)
             {
                 player.ShowHint("Searching for a friend...");
@@ -84,6 +84,8 @@ namespace CustomGameModes.GameModes
 
             while (keycardFriendPickup == null)
             {
+                if (Friend.IsDead) goto FriendDead;
+
                 var compass = HotAndCold(Friend.Position);
                 FormatTask($"Go get a keycard from {PlayerNameFmt(Friend)}.", compass);
                 yield return Timing.WaitForSeconds(0.5f);
@@ -91,10 +93,20 @@ namespace CustomGameModes.GameModes
 
             while (NotHasItem(keycardFriendPickup.Type, out var item))
             {
+                if (Friend.IsDead) goto FriendDead;
+
                 var compass = GetCompass(keycardFriendPickup.Position);
                 FormatTask($"Get the keycard that {PlayerNameFmt(Friend)} dropped for you.", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
+
+            goto End;
+            FriendDead: {
+                player.ShowHint($"{PlayerNameFmt(Friend)} died. Here's a consolation keycard.", 10);
+                EnsureItem(ItemType.KeycardMTFPrivate);
+                yield return Timing.WaitForSeconds(10);
+            }
+            End: { }
         }
 
 

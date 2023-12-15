@@ -85,7 +85,7 @@ namespace CustomGameModes.GameModes
             {
                 scp = MyTargetPickup.Type;
                 var compass = GetCompass(MyTargetPickup.Position);
-                FormatTask($"Retrieve {strong(MyTargetPickup.Type.ToString())}", compass);
+                FormatTask($"Retrieve {strong(MyTargetPickup.Type)}", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
 
@@ -104,7 +104,7 @@ namespace CustomGameModes.GameModes
 
                 while (!usedItem)
                 {
-                    FormatTask($"Use {strong(scp.ToString())}", "");
+                    FormatTask($"Use {strong(scp)}", "");
                     yield return Timing.WaitForSeconds(1);
                 }
 
@@ -132,7 +132,7 @@ namespace CustomGameModes.GameModes
             {
                 scp = MyTargetPickup.Type;
                 var compass = GetCompass(MyTargetPickup.Position);
-                FormatTask($"Retrieve {strong(MyTargetPickup.Type.ToString())}", compass);
+                FormatTask($"Retrieve {strong(MyTargetPickup.Type)}", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
 
@@ -151,7 +151,7 @@ namespace CustomGameModes.GameModes
 
                 while (!usedItem)
                 {
-                    FormatTask($"Use {strong(scp.ToString())}", "");
+                    FormatTask($"Use {strong(scp)}", "");
                     yield return Timing.WaitForSeconds(1);
                 }
 

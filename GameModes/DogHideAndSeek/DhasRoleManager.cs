@@ -38,6 +38,11 @@ namespace CustomGameModes.GameModes
         public delegate void PlayerCompleteOneTaskEvent(Player player);
         public event PlayerCompleteOneTaskEvent PlayerCompleteOneTask;
 
+        /// <summary>
+        /// Should the beast be granted special powers?
+        /// </summary>
+        public bool BeastSickoModeActivate = false;
+
         public string[] RoleDistribution;
 
         public DhasRoleManager()

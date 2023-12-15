@@ -55,7 +55,7 @@ namespace CustomGameModes.GameModes
 
             while (!done)
             {
-                var nearest = GetNearestTeammate();
+                var nearest = GetNearestCrewmate();
                 IsNear(nearest, requiredDistance, out var dist);
 
                 FormatTask($"Be Near Someone ({dist}) When\nThey Complete a Task", "");
@@ -74,7 +74,7 @@ namespace CustomGameModes.GameModes
         private IEnumerator<float> FindPlayerA()
         {
             var requiredDistance = 5;
-            playerA = Teammates.Pool(x => x != player && (player.Position - x.Position).magnitude > requiredDistance);
+            playerA = OtherCrewmates.Pool(x => x != player && (player.Position - x.Position).magnitude > requiredDistance);
             if (playerA != null)
             {
 
@@ -105,7 +105,7 @@ namespace CustomGameModes.GameModes
         private IEnumerator<float> FindPlayerB()
         {
             var requiredDistance = 5;
-            playerB = Teammates.Pool(x => x != player && x != playerA && (player.Position - x.Position).magnitude > requiredDistance);
+            playerB = OtherCrewmates.Pool(x => x != player && x != playerA && (player.Position - x.Position).magnitude > requiredDistance);
             if (playerB != null)
             {
 

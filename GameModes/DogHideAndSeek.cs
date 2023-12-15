@@ -105,13 +105,13 @@ namespace CustomGameModes.GameModes
                 // If the SCP kills everyone, the coroutine will still be running. Kill it.
                 Timing.KillCoroutines(roundHandlerCO);
             }
-            else if (!Player.List.Any(p => p.Role.Team == PlayerRoles.Team.SCPs))
+            else if (!Player.List.Any(p => p.Role.Team == Team.SCPs))
             {
                 // the SCP got disconnected early
-                CountdownHelper.Stop();
             }
             // else, the Class-D survived long enough.
 
+            CountdownHelper.Stop();
             Manager.StopAll();
         }
 
@@ -191,6 +191,10 @@ namespace CustomGameModes.GameModes
                 }
             }
             else if (ev.Door == beastDoor || ev.Door.Zone != ZoneType.LightContainment)
+            {
+                ev.IsAllowed = false;
+            }
+            else if (Room.Get(RoomType.LczArmory).Doors.Contains(ev.Door) && ev.Door.IsOpen)
             {
                 ev.IsAllowed = false;
             }
@@ -331,6 +335,7 @@ namespace CustomGameModes.GameModes
             DoorsLockedExceptToRole.Add(Door.Get(DoorType.CheckpointLczB));
             DoorsLockedExceptToRole.AddRange(Room.Get(RoomType.Lcz173).Doors.Where(d => d.IsGate));
             DoorsLockedExceptToRole.Add(Room.Get(RoomType.Lcz914).Doors.First(d => d.IsGate));
+            DoorsLockedExceptToRole.AddRange(Room.Get(RoomType.Lcz330).Doors.Where(d => d.Rooms.Count == 1));
 
             foreach (var lczdoor in LCZDoors)
             {
@@ -382,6 +387,7 @@ namespace CustomGameModes.GameModes
 
             var getBroadcast = (DhasRole p) => p.CountdownBroadcast;
 
+            double elapsedTime() => (DateTime.Now - timerStartedTime).TotalSeconds;
             void removeTime(int seconds)
             {
                 var elapsed = (int)(DateTime.Now - timerStartedTime).TotalSeconds;
@@ -396,7 +402,7 @@ namespace CustomGameModes.GameModes
             Manager.RemovingTime += removeTime;
             Manager.PlayerDied += onPlayerRoleDied;
             Manager.PlayerCompleteAllTasks += onPlayerCompleteAllTasks;
-            while ((DateTime.Now - timerStartedTime).TotalSeconds < timerTotalSeconds) yield return Timing.WaitForSeconds(1);
+            while (elapsedTime() < timerTotalSeconds) yield return Timing.WaitForSeconds(1);
 
             // ----------------------------------------------------------------------------------------------------------------
             // ----------------------------------------------------------------------------------------------------------------
@@ -410,7 +416,11 @@ namespace CustomGameModes.GameModes
                 beast.player.ShowHint("Break Free", 7);
 
             removeTime(0);
-            while ((DateTime.Now - timerStartedTime).TotalSeconds < timerTotalSeconds) yield return Timing.WaitForSeconds(1);
+            while (elapsedTime() < timerTotalSeconds)
+            {
+                if (timerTotalSeconds - elapsedTime() < 70) Manager.BeastSickoModeActivate = true;
+                yield return Timing.WaitForSeconds(1);
+            }
 
             Manager.RemovingTime -= removeTime;
             Manager.PlayerDied -= onPlayerRoleDied;
@@ -456,9 +466,8 @@ namespace CustomGameModes.GameModes
 
         private void onPlayerRoleDied(Player ev)
         {
-            var playerDeadCount = Manager.Humans().Count();
             Cassie.Clear();
-            Cassie.DelayedMessage($"{playerDeadCount} personnel are dead", 3f, isNoisy: false);
+            Cassie.DelayedMessage($"1 personnel is dead", 3f, isNoisy: false);
         }
 
         private void onPlayerCompleteAllTasks(Player ev)

@@ -65,7 +65,7 @@ namespace CustomGameModes.GameModes
             runningTaskList = Tasks;
         }
 
-        public virtual string CountdownBroadcast => "Releasing the Beast in: ❤";
+        public virtual string CountdownBroadcast => "Releasing the Beast from GR-18 in: ❤";
         public virtual string MainGameBroadcast => "Do your tasks and Survive!";
         public virtual string RoundEndBroadcast => "You Win!\nKill The Beast!";
 
@@ -138,10 +138,10 @@ namespace CustomGameModes.GameModes
                 MyTargetPickup = null;
                 Manager.OnPlayerCompleteOneTask(player);
 
+                RemoveTime();
+
                 ShowTaskCompleteMessage(3);
                 yield return Timing.WaitForSeconds(3);
-
-                RemoveTime();
 
                 // increment task
                 CurrentTaskNum++;
@@ -273,25 +273,25 @@ namespace CustomGameModes.GameModes
             return true;
         }
 
-        public List<Player> Teammates => Manager.Humans()
+        public List<Player> OtherCrewmates => Manager.Humans()
             .Where(r => r.player != player)
             .Select(r => r.player)
             .ToList();
 
         public Player Beast => Manager.Beast().FirstOrDefault()?.player;
 
-        protected Player GetFarthestTeammate()
+        protected Player GetFarthestCrewmate()
         {
-            var farthestPlayer = Teammates
+            var farthestPlayer = OtherCrewmates
                     .OrderByDescending(p => (p.Position - player.Position).magnitude)
                     .FirstOrDefault();
             if (farthestPlayer == null || farthestPlayer == player) return null;
             return farthestPlayer;
         }
 
-        public Player GetNearestTeammate()
+        public Player GetNearestCrewmate()
         {
-            var nearestTeammate = Teammates
+            var nearestTeammate = OtherCrewmates
                     .OrderBy(p => (p.Position - player.Position).magnitude)
                     .FirstOrDefault();
             if (nearestTeammate == null || nearestTeammate == player) return null;
@@ -500,12 +500,12 @@ namespace CustomGameModes.GameModes
                 RoleTypeId.Scientist => "yellow",
                 RoleTypeId.ClassD => "orange",
                 RoleTypeId.NtfCaptain => "blue",
-                _ => "pink",
+                _ => "red",
             };
             return strong($"<color={color}>{player.DisplayNickname}</color>");
         }
 
-        public string strong(string s)
+        public string strong(object s)
         {
             return $"<b>{s}</b>";
         }

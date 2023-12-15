@@ -5,6 +5,7 @@ using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
 using Exiled.Events.EventArgs.Player;
+using HarmonyLib;
 using MEC;
 using PlayerRoles;
 using System;
@@ -102,6 +103,7 @@ namespace CustomGameModes.GameModes
             player.Role.Set(_escapedRole, RoleSpawnFlags.None);
             player.AddAmmo(AmmoType.Nato556, 50);
             EnsureItem(ItemType.GunE11SR);
+            EnsureItem(ItemType.ArmorCombat);
         }
 
         [CrewmateTask(TaskDifficulty.Hard)]
@@ -114,11 +116,16 @@ namespace CustomGameModes.GameModes
             PlayerEvent.Hurting += Hurting;
             PlayerEvent.Died += OnDied;
 
+            RemainingLives = 5;
+
             while (IsRunning)
             {
+                var a = new List<string>();
+                for (int i = 0; i < RemainingLives; i++) a.Add("❤");
+
                 FormatTask($"""
                     Protect your Teammates
-                    Remaining Lives: {RemainingLives}
+                    Remaining Lives: {string.Join("", a)}
                     """, "");
                 yield return Timing.WaitForSeconds(1);
             }
@@ -140,13 +147,14 @@ namespace CustomGameModes.GameModes
         {
             RemainingLives--;
 
-            if (RemainingLives == 0) return;
+            if (RemainingLives <= 0) return;
 
             ev.Player.Role.Set(_escapedRole, RoleSpawnFlags.None);
             player.AddAmmo(AmmoType.Nato556, 50);
             player.CurrentItem = EnsureFirearm(FirearmType.E11SR);
             EnsureItem(ItemType.Flashlight);
-            player.Position = GetFarthestTeammate()?.Position 
+            EnsureItem(ItemType.ArmorCombat);
+            player.Position = GetFarthestCrewmate()?.Position 
                 ?? ev.Attacker?.Position 
                 ?? SpawnLocationType.Inside173Bottom.GetPosition() + UnityEngine.Vector3.up;
         }
