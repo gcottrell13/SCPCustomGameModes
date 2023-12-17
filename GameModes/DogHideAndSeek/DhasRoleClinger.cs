@@ -25,6 +25,10 @@ namespace CustomGameModes.GameModes
 
         public override void OnStop()
         {
+            if (CurrentTask == BeNearWhenTaskComplete)
+            {
+                Manager.PlayerCompleteOneTask -= OnSomeoneCompleteTask;
+            }
         }
 
         public override List<dhasTask> Tasks => new()
@@ -40,28 +44,28 @@ namespace CustomGameModes.GameModes
             player.Role.Set(RoleType(), RoleSpawnFlags.UseSpawnpoint);
         }
 
+
+        int requiredFriendDistance = 5;
+        bool completedTask = false;
+        void OnSomeoneCompleteTask(Player p)
+        {
+            if ((player.Position - p.Position).magnitude < requiredFriendDistance)
+                completedTask = true;
+        }
+
         [CrewmateTask(TaskDifficulty.Medium)]
         private IEnumerator<float> BeNearWhenTaskComplete()
         {
-            var done = false;
-            var requiredDistance = 5;
-            void OnSomeoneCompleteTask(Player p)
-            {
-                if ((player.Position - p.Position).magnitude < requiredDistance)
-                    done = true;
-            }
-
             Manager.PlayerCompleteOneTask += OnSomeoneCompleteTask;
 
-            while (!done)
+            while (!completedTask)
             {
                 var nearest = GetNearestCrewmate();
-                IsNear(nearest, requiredDistance, out var dist);
+                IsNear(nearest, requiredFriendDistance, out var dist);
 
                 FormatTask($"Be Near Someone ({dist}) When\nThey Complete a Task", "");
                 yield return Timing.WaitForSeconds(1);
             }
-
 
             Manager.PlayerCompleteOneTask -= OnSomeoneCompleteTask;
         }
@@ -74,9 +78,10 @@ namespace CustomGameModes.GameModes
         private IEnumerator<float> FindPlayerA()
         {
             var requiredDistance = 5;
-            playerA = OtherCrewmates.Pool(x => x != player && (player.Position - x.Position).magnitude > requiredDistance);
+            playerA = OtherCrewmates.Pool(x => !IsNear(x, requiredFriendDistance));
             if (playerA != null)
             {
+                if (playerA.IsDead) goto Condolences;
 
                 while (!IsNear(playerA, requiredDistance, out var dist))
                 {
@@ -84,6 +89,13 @@ namespace CustomGameModes.GameModes
                     FormatTask($"Be Within {dist} of {PlayerNameFmt(playerA)}", compass);
                     yield return Timing.WaitForSeconds(0.5f);
                 }
+            }
+
+        Condolences:
+            if (playerA.IsDead)
+            {
+                player.ShowHint($"{PlayerNameFmt(playerA)} has died. Condolences.", 5);
+                yield return Timing.WaitForSeconds(5);
             }
         }
 
@@ -104,17 +116,24 @@ namespace CustomGameModes.GameModes
         [CrewmateTask(TaskDifficulty.Medium)]
         private IEnumerator<float> FindPlayerB()
         {
-            var requiredDistance = 5;
-            playerB = OtherCrewmates.Pool(x => x != player && x != playerA && (player.Position - x.Position).magnitude > requiredDistance);
+            playerB = OtherCrewmates.Pool(x => x != playerA && !IsNear(x, requiredFriendDistance));
             if (playerB != null)
             {
+                if (playerB.IsDead) goto Condolences;
 
-                while (!IsNear(playerB, requiredDistance, out var dist))
+                while (!IsNear(playerB, requiredFriendDistance, out var dist))
                 {
                     var compass = GetCompass(playerB.Position);
                     FormatTask($"Be Within {dist} of {PlayerNameFmt(playerB)}", compass);
                     yield return Timing.WaitForSeconds(0.5f);
                 }
+            }
+
+        Condolences:
+            if (playerB.IsDead)
+            {
+                player.ShowHint($"{PlayerNameFmt(playerB)} has died. Condolences.", 5);
+                yield return Timing.WaitForSeconds(5);
             }
         }
 

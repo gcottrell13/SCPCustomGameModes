@@ -22,6 +22,9 @@ namespace CustomGameModes.GameModes
         public Dictionary<Player, RoleTypeId[]> HurtRoles = new();
         public List<Player> AllowedToUse914 = new();
 
+        // not to be targeted by the GoGetPickup method
+        public List<Pickup> UpgradedPickups = new();
+
         public List<Func<Player, DhasRole>> RoleList { get; private set; }
 
         public List<DhasRole> ActiveRoles = new();
@@ -78,6 +81,7 @@ namespace CustomGameModes.GameModes
             {DhasRoleMadman.name, (player) => new DhasRoleMadman(player, this) },
             {DhasRoleScientist.name, (player) => new DhasRoleScientist(player, this) },
             {BeastRole.name, (player) => new BeastRole(player, this) },
+            {SpectatorRole.name, (player) => new SpectatorRole(player, this) },
         };
 
         public DhasRole ApplyRoleToPlayer(Player player, string name)
@@ -99,10 +103,19 @@ namespace CustomGameModes.GameModes
 
         public void StopAll()
         {
-            foreach(var role in ActiveRoles)
+            foreach (var role in ActiveRoles)
             {
                 role.Stop();
             }
+
+            UpgradedPickups.Clear();
+            ClaimedPickups.Clear();
+            ItemsToDrop.Clear();
+            DoorsToOpen.Clear();
+            PlayerRoles.Clear();
+            HurtRoles.Clear();
+            AllowedToUse914.Clear();
+            ActiveRoles.Clear();
         }
 
         public void StartAll()
@@ -113,14 +126,9 @@ namespace CustomGameModes.GameModes
             }
         }
 
-        public List<DhasRole> Humans() => ActiveRoles.Where(role => role.RoleType().GetTeam() switch
-        {
-            Team.SCPs => false,
-            Team.Dead => false,
-            _ => true,
-        }).ToList();
+        public List<DhasRole> Humans() => ActiveRoles.Where(role => role.player.IsHuman).ToList();
 
-        public List<DhasRole> Beast() => ActiveRoles.Where(role => role.RoleType() == RoleTypeId.Scp939).ToList();
+        public List<DhasRole> Beast() => ActiveRoles.Where(role => role.player.IsScp).ToList();
 
         public void OnRemoveTime(int seconds) => RemovingTime?.Invoke(seconds);
 

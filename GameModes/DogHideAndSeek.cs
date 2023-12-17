@@ -17,6 +17,7 @@ using UnityEngine;
 using PlayerEvent = Exiled.Events.Handlers.Player;
 using MapEvent = Exiled.Events.Handlers.Map;
 using Scp914Handler = Exiled.Events.Handlers.Scp914;
+using ServerEvent = Exiled.Events.Handlers.Server;
 using PluginAPI.Events;
 using Exiled.Events.EventArgs.Map;
 using LightContainmentZoneDecontamination;
@@ -26,6 +27,12 @@ using Exiled.Events.EventArgs.Scp914;
 using Exiled.API.Features.Pickups;
 using Scp914;
 using PlayerRoles;
+using Scp914.Processors;
+using CommandSystem.Commands.RemoteAdmin;
+using CommandSystem.Commands.RemoteAdmin.MutingAndIntercom;
+using PlayerRoles.Voice;
+using System.Reflection;
+using InventorySystem;
 
 namespace CustomGameModes.GameModes
 {
@@ -49,25 +56,30 @@ namespace CustomGameModes.GameModes
 
         int EndOfRoundTime = 30;
 
+        public DogHideAndSeek()
+        {
+        }
+
         public void OnRoundStart()
         {
             // -------------------------------------------------------------
             // Event Handlers
             // -------------------------------------------------------------
             PlayerEvent.InteractingDoor += OnInteractDoor;
-            MapEvent.SpawningTeamVehicle += OnSpawnTeam;
             PlayerEvent.Hurting += OnHurting;
             PlayerEvent.SearchingPickup += OnSearchingPickup;
             PlayerEvent.DroppingAmmo += DeniableEvent;
             PlayerEvent.DroppingItem += OnDropItem;
             PlayerEvent.PlayerDamageWindow += PlayerDamagingWindow;
 
+            ServerEvent.RespawningTeam += DeniableEvent;
+
             Scp914Handler.Activating += Activate914;
             Scp914Handler.UpgradingPickup += UpgradePickup;
             //Scp914Handler.ChangingKnobSetting += DeniableEvent;
             //Scp914Handler.UpgradingPickup += DeniableEvent;
             Scp914Handler.UpgradingInventoryItem += DeniableEvent;
-            Scp914Handler.UpgradingPlayer += DeniableEvent;
+            //Scp914Handler.UpgradingPlayer += DeniableEvent;
             // -------------------------------------------------------------
             // -------------------------------------------------------------
 
@@ -84,19 +96,20 @@ namespace CustomGameModes.GameModes
             // Event Handlers
             // -------------------------------------------------------------
             PlayerEvent.InteractingDoor -= OnInteractDoor;
-            MapEvent.SpawningTeamVehicle -= OnSpawnTeam;
             PlayerEvent.Hurting -= OnHurting;
             PlayerEvent.SearchingPickup -= OnSearchingPickup;
             PlayerEvent.DroppingAmmo -= DeniableEvent;
             PlayerEvent.DroppingItem -= OnDropItem;
             PlayerEvent.PlayerDamageWindow -= PlayerDamagingWindow;
 
+            ServerEvent.RespawningTeam -= DeniableEvent;
+
             Scp914Handler.Activating -= Activate914;
             Scp914Handler.UpgradingPickup -= UpgradePickup;
             //Scp914Handler.ChangingKnobSetting -= DeniableEvent;
             //Scp914Handler.UpgradingPickup -= DeniableEvent;
             Scp914Handler.UpgradingInventoryItem -= DeniableEvent;
-            Scp914Handler.UpgradingPlayer -= DeniableEvent;
+            //Scp914Handler.UpgradingPlayer -= DeniableEvent;
             // -------------------------------------------------------------
             // -------------------------------------------------------------
 
@@ -118,7 +131,6 @@ namespace CustomGameModes.GameModes
         public void OnWaitingForPlayers()
         {
             DecontaminationController.Singleton.NetworkDecontaminationOverride = DecontaminationController.DecontaminationStatus.None;
-
         }
 
         #region Event Handlers
@@ -145,8 +157,13 @@ namespace CustomGameModes.GameModes
             if (Manager.ClaimedPickups.TryGetValue(e.Pickup, out var assignedPlayer) && e.Player == assignedPlayer)
             {
                 // allow it
+                Manager.ClaimedPickups.Remove(e.Pickup);
             }
             else if (e.Pickup.PreviousOwner == e.Player)
+            {
+                // allow it
+            }
+            else if (e.Pickup.Type.IsAmmo())
             {
                 // allow it
             }
@@ -159,6 +176,8 @@ namespace CustomGameModes.GameModes
         private void OnDropItem(DroppingItemEventArgs e)
         {
             if (Manager == null) { e.IsAllowed = false; return; }
+            return;
+
             if (Manager.ItemsToDrop.TryGetValue(e.Player, out var items) && items.Contains(e.Item.Type))
             {
                 // allow it
@@ -169,11 +188,9 @@ namespace CustomGameModes.GameModes
             }
         }
 
-        private void OnSpawnTeam(SpawningTeamVehicleEventArgs ev)
+        private void DroppedItem(DroppedItemEventArgs e)
         {
-            // should be enough to prevent MTF and Chaos from spawning?
-            // effectively keeping everyone as spectator until the end of the round
-            ev.IsAllowed = false;
+            Manager.ClaimedPickups[e.Pickup] = e.Player;
         }
 
         private void OnInteractDoor(InteractingDoorEventArgs ev)
@@ -220,6 +237,10 @@ namespace CustomGameModes.GameModes
                 {
                     ev.IsAllowed = false;
                 }
+                if (ev.Attacker?.IsHuman == true && ev.Player.IsHuman)
+                {
+                    ev.IsAllowed = false;
+                }
             }
             else if (ev.Attacker != null && Manager.HurtRoles.TryGetValue(ev.Attacker, out var roles) && roles.Contains(ev.Player.Role.Type))
             {
@@ -243,24 +264,18 @@ namespace CustomGameModes.GameModes
         private void UpgradePickup(UpgradingPickupEventArgs ev)
         {
             if (Manager == null) { ev.IsAllowed = false; return; }
-            if (ev.Pickup.Type.IsKeycard())
+
+            if (InventoryItemLoader.AvailableItems.TryGetValue(ev.Pickup.Type, out var value) && value.TryGetComponent<Scp914ItemProcessor>(out var processor))
             {
-                ev.IsAllowed = false;
-                ev.Pickup.UnSpawn();
-                var newType = ev.KnobSetting switch
-                {
-                    Scp914KnobSetting.VeryFine => ItemType.KeycardO5,
-                    Scp914KnobSetting.Fine => ItemType.KeycardResearchCoordinator,
-                    Scp914KnobSetting.OneToOne => ev.Pickup.Type,
-                    Scp914KnobSetting.Coarse => ItemType.KeycardJanitor,
-                    Scp914KnobSetting.Rough => ItemType.KeycardJanitor,
-                };
-                var newPickup = Pickup.CreateAndSpawn(newType, ev.OutputPosition, ev.Pickup.Rotation, ev.Pickup.PreviousOwner);
+                var newPickupBase = processor.OnPickupUpgraded(ev.KnobSetting, ev.Pickup.Base, ev.OutputPosition);
+                var newPickup = Pickup.Get(newPickupBase);
+                Manager.ClaimedPickups.Remove(ev.Pickup);
+                Manager.ClaimedPickups[newPickup] = ev.Pickup.PreviousOwner;
+                if (newPickup != ev.Pickup)
+                    ev.Pickup.Destroy();
+                Log.Info($"914 created {newPickup.Type}");
             }
-            else
-            {
-                ev.IsAllowed = false;
-            }
+            ev.IsAllowed = false;
         }
 
         public void DeniableEvent(IDeniableEvent ev)
@@ -331,8 +346,6 @@ namespace CustomGameModes.GameModes
                 if (door.Rooms.Count == 2 && door.DoorLockType == DoorLockType.None) DoorsReopenAfterClosing.Add(door);
             }
 
-            DoorsLockedExceptToRole.Add(Door.Get(DoorType.CheckpointLczA));
-            DoorsLockedExceptToRole.Add(Door.Get(DoorType.CheckpointLczB));
             DoorsLockedExceptToRole.AddRange(Room.Get(RoomType.Lcz173).Doors.Where(d => d.IsGate));
             DoorsLockedExceptToRole.Add(Room.Get(RoomType.Lcz914).Doors.First(d => d.IsGate));
             DoorsLockedExceptToRole.AddRange(Room.Get(RoomType.Lcz330).Doors.Where(d => d.Rooms.Count == 1));
@@ -437,29 +450,39 @@ namespace CustomGameModes.GameModes
 
             Cassie.MessageTranslated("The Class D Are Successful", "Class-D Win!");
 
-            Manager.StopAll();
-
-            foreach (var classD in Player.List.Where(x => x.Role.Team switch
-            {
-                Team.Dead => false,
-                Team.SCPs => false,
-                _ => true,
-            }))
+            foreach (var classD in Player.List.Where(x => x.IsHuman))
             {
                 classDWin = true;
                 var item = classD.AddItem(ItemType.MicroHID);
                 classD.CurrentItem = item;
             }
 
-            foreach (var dclass in Manager.ActiveRoles)
-                CountdownHelper.AddCountdown(dclass.player, dclass.RoundEndBroadcast, TimeSpan.FromSeconds(EndOfRoundTime));
+            foreach (var player in Manager.ActiveRoles)
+                CountdownHelper.AddCountdown(player.player, player.RoundEndBroadcast, TimeSpan.FromSeconds(EndOfRoundTime));
+
+            Manager.StopAll();
 
             yield return Timing.WaitForSeconds(EndOfRoundTime);
 
-            foreach (var beast in Manager.Beast()) 
-                beast.player.Hurt(-1);
+            //foreach (var beast in Manager.Beast())
+            //{
+            //    if (beast.player.IsAlive)
+            //        beast.player.Hurt(-1);
+            //}
+
             // ----------------------------------------------------------------------------------------------------------------
             // ----------------------------------------------------------------------------------------------------------------
+
+            if (!Round.EndRound(true))
+            {
+                Log.Error("Round was not successfully forced to end");
+            }
+
+            while (true)
+            {
+                Log.Debug("Round STILL going");
+                yield return Timing.WaitForSeconds(2);
+            }
         }
 
         #endregion
@@ -468,6 +491,9 @@ namespace CustomGameModes.GameModes
         {
             Cassie.Clear();
             Cassie.DelayedMessage($"1 personnel is dead", 3f, isNoisy: false);
+
+            var specRole = Manager.ApplyRoleToPlayer(ev, SpectatorRole.name);
+            specRole.Start();
         }
 
         private void onPlayerCompleteAllTasks(Player ev)

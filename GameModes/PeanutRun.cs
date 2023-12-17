@@ -27,17 +27,14 @@ namespace CustomGameModes.GameModes
 
             for (var i = 0; i < players.Count; i++)
             {
-                var player = players[i];
-                if (i == 0)
+                Action<Player> setup = i switch
                 {
-                    player.Role.Set(PlayerRoles.RoleTypeId.Scp173, PlayerRoles.RoleSpawnFlags.UseSpawnpoint);
-                    SetupSCP173(player);
-                }
-                else
-                {
-                    player.Role.Set(PlayerRoles.RoleTypeId.ClassD, PlayerRoles.RoleSpawnFlags.UseSpawnpoint);
-                    SetupClassD(player);
-                }
+                    0 => SetupSCP173,
+                    1 => SetupSCP173,
+                    _ => SetupClassD,
+                };
+
+                setup(players[i]);
             }
         }
         public void OnRoundEnd()
@@ -56,6 +53,7 @@ namespace CustomGameModes.GameModes
 
         public void SetupSCP173(Player player)
         {
+            player.Role.Set(PlayerRoles.RoleTypeId.Scp173, PlayerRoles.RoleSpawnFlags.UseSpawnpoint);
             Timing.CallDelayed(15, () =>
             {
                 player.ShowHint("""
@@ -68,6 +66,8 @@ namespace CustomGameModes.GameModes
 
         public void SetupClassD(Player player)
         {
+            player.Role.Set(PlayerRoles.RoleTypeId.ClassD, PlayerRoles.RoleSpawnFlags.UseSpawnpoint);
+            player.ClearInventory();
             player.CurrentItem = player.AddItem(ItemType.KeycardO5);
             player.AddItem(ItemType.SCP207, 4);
 
@@ -95,9 +95,8 @@ namespace CustomGameModes.GameModes
                 {
                     Timing.CallDelayed(0.5f, () =>
                     {
-                        ev.Player.Role.Set(PlayerRoles.RoleTypeId.Scp173);
-                        ev.Player.Teleport(ev.Attacker.Position);
                         SetupSCP173(ev.Player);
+                        ev.Player.Teleport(ev.Attacker.Position);
                     });
                 }
             }
@@ -107,7 +106,7 @@ namespace CustomGameModes.GameModes
         {
             foreach (var scp in Player.List.Where(p => p.Role.Type == PlayerRoles.RoleTypeId.Scp173))
             {
-                scp.Hurt(-1, Exiled.API.Enums.DamageType.Warhead);
+                scp.Explode();
             }
         }
 

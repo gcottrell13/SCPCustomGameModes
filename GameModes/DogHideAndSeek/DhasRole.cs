@@ -38,6 +38,8 @@ namespace CustomGameModes.GameModes
 
         private List<dhasTask> runningTaskList;
 
+        public string CurrentTaskHint { get; private set; } = "";
+
         public int CurrentTaskNum { get; private set; }
         public dhasTask CurrentTask { get
             {
@@ -124,7 +126,7 @@ namespace CustomGameModes.GameModes
                     {
                         Log.Error(e);
                     }
-                    if (player.Role.Type == RoleTypeId.Spectator)
+                    if (player.Role.Type == RoleTypeId.Spectator && RoleType() != RoleTypeId.Spectator)
                     {
                         // dead =(
                         Manager.OnPlayerDied(player);
@@ -134,6 +136,8 @@ namespace CustomGameModes.GameModes
                     if (d)
                         yield return nextTask.Current;
                 }
+
+                Log.Debug($"{player.DisplayNickname} completed task {CurrentTask.Method.Name}");
 
                 MyTargetPickup = null;
                 Manager.OnPlayerCompleteOneTask(player);
@@ -160,8 +164,9 @@ namespace CustomGameModes.GameModes
         public virtual void ShowTaskCompleteMessage(float duration)
         {
             var d = taskDifficulty.DifficultyTime();
-
-            player.ShowHint($"{TaskSuccessMessage} (-{d}s)", duration);
+            var message = $"{TaskSuccessMessage} (-{d}s)";
+            CurrentTaskHint = message;
+            player.ShowHint(message, duration);
         }
 
         private TaskDifficulty taskDifficulty => CurrentTask.GetMethodInfo().GetCustomAttribute<CrewmateTaskAttribute>().Difficulty;
@@ -187,6 +192,7 @@ namespace CustomGameModes.GameModes
                 {message}
                 {compass}
                 """;
+            CurrentTaskHint = taskMessage;
             player.ShowHint(taskMessage);
         }
 
@@ -196,7 +202,6 @@ namespace CustomGameModes.GameModes
         {
             var inZone = Pickup.List.Where(
                 p => p.Room?.Zone == player.CurrentRoom?.Zone
-                && p.Room.Type != RoomType.Lcz914
                 && p.Room.Type != RoomType.LczPlants
             );
             var validPickups = new List<Pickup>();
@@ -464,7 +469,6 @@ namespace CustomGameModes.GameModes
         protected IEnumerator<float> UpgradeKeycard()
         {
             CanUse914();
-            CanDropItem(MyKeycardType);
 
             while (NotHasItem(ItemType.KeycardO5, out var item))
             {
@@ -472,11 +476,10 @@ namespace CustomGameModes.GameModes
                     GetCompass(Door.Get(DoorType.Scp914Gate).Position) :
                     "";
 
-                FormatTask("Upgrade Your Keycard", compass);
+                FormatTask("Upgrade Your Keycard to <b><color=orange>O5</color></b>", compass);
                 yield return Timing.WaitForSeconds(1);
             }
 
-            CannotDropItem(MyKeycardType);
             CannotUse914();
         }
 

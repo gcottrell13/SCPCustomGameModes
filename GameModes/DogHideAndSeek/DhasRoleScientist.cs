@@ -1,4 +1,4 @@
-﻿using CustomGameModes.API;
+using CustomGameModes.API;
 using Exiled.API.Enums;
 using Exiled.API.Extensions;
 using Exiled.API.Features;
@@ -26,7 +26,6 @@ namespace CustomGameModes.GameModes
         public override RoleTypeId RoleType() => RoleTypeId.Scientist;
 
         public ItemType SCP1;
-        public ItemType SCP2;
 
         public override List<dhasTask> Tasks => new()
         {

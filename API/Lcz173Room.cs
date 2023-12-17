@@ -13,7 +13,7 @@ namespace CustomGameModes.API
     internal class Lcz173Room
     {
         private static Room thisroom;
-        private static Door gate;
+        public static Door gate;
         private static Door otherdoor;
         private static Vector3 behindHere;
 

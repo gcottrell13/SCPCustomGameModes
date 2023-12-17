@@ -63,6 +63,8 @@ namespace CustomGameModes.GameModes
         {
         GetFriend:
 
+            var searchedForFriendTimes = 0;
+
             Friend = OtherCrewmates.Pool(teammate =>
             {
                 var friendrole = Manager.PlayerRoles[teammate];
@@ -75,8 +77,17 @@ namespace CustomGameModes.GameModes
 
             if (Friend == null)
             {
+                if (searchedForFriendTimes > 10)
+                {
+                    player.ShowHint($"You don't have any friends. =( \nA consolation keycard has been added to your inventory.", 10);
+                    var item = EnsureItem(ItemType.KeycardMTFPrivate);
+                    yield return Timing.WaitForSeconds(10);
+                    goto End;
+                }
+
                 player.ShowHint("Searching for a friend...");
                 yield return Timing.WaitForSeconds(1);
+                searchedForFriendTimes++;
                 goto GetFriend;
             }
 
@@ -93,20 +104,20 @@ namespace CustomGameModes.GameModes
 
             while (NotHasItem(keycardFriendPickup.Type, out var item))
             {
-                if (Friend.IsDead) goto FriendDead;
-
                 var compass = GetCompass(keycardFriendPickup.Position);
                 FormatTask($"Get the keycard that {PlayerNameFmt(Friend)} dropped for you.", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
 
             goto End;
-            FriendDead: {
-                player.ShowHint($"{PlayerNameFmt(Friend)} died. Here's a consolation keycard.", 10);
-                EnsureItem(ItemType.KeycardMTFPrivate);
+        FriendDead: 
+            {
+                player.ShowHint($"{PlayerNameFmt(Friend)} died. \nA consolation keycard has been added to your inventory.", 10);
+                var item = EnsureItem(ItemType.KeycardMTFPrivate);
                 yield return Timing.WaitForSeconds(10);
             }
-            End: { }
+        End: 
+            { }
         }
 
 
@@ -137,6 +148,8 @@ namespace CustomGameModes.GameModes
             var mustRunSeconds = 20f * timesPerSecond;
             var timeElapsed = 0f;
 
+            if (Lcz173Room.gate != null) Lcz173Room.gate.IsOpen = true;
+
             void hint()
             {
                 var d = (int)((mustRunSeconds - timeElapsed) / timesPerSecond);
@@ -146,18 +159,18 @@ namespace CustomGameModes.GameModes
                     FormatTask($"Stand on CUBE for an additional\n{d} seconds", "");
             }
 
-            bool predicate()
+            bool onCube()
             {
                 var in173 = player.CurrentRoom.RoomName == MapGeneration.RoomName.Lcz173;
-                var onCube = player.Position.y > 12;
-                return in173 && onCube;
+                var aboveCube = player.Position.y >= 13.4;
+                return in173 && aboveCube;
             }
 
             Cube.Position = new(Cube.Position.x, 12f, Cube.Position.z);
 
             while (timeElapsed < mustRunSeconds)
             {
-                if (player.Position.y >= 13.4)
+                if (onCube())
                 {
                     timeElapsed += 1;
                     Cube.Rotation = Quaternion.AngleAxis(timeElapsed / timesPerSecond * 90, Vector3.up);
@@ -230,10 +243,9 @@ namespace CustomGameModes.GameModes
 
         void InteractDoor(InteractingDoorEventArgs ev)
         {
-            if (ev.Door.IsGate
-                && ev.Door.Room.RoomName == MapGeneration.RoomName.Lcz173
+            if (ev.Door == Lcz173Room.gate
                 && ev.Player == player
-                && ev.Player.CurrentItem?.Type == friendPickup.Type)
+                && ev.Player.CurrentItem?.Type == keycardFriendPickup.Type)
             {
                 doorOpened = true;
                 ev.Door.IsOpen = true;

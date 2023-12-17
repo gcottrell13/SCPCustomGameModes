@@ -83,7 +83,7 @@ namespace CustomGameModes.GameModes
                 if (!givingGhostlight)
                 {
                     givingGhostlight = true;
-                    Timing.CallDelayed(4f, () =>
+                    Timing.CallDelayed(10f, () =>
                     {
                         givingGhostlight = false;
                         player.CurrentItem = player.AddItem(ItemType.SCP2176);

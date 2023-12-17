@@ -4,6 +4,7 @@ using Exiled.API.Features;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
+using Exiled.API.Structs;
 using Exiled.Events.EventArgs.Player;
 using HarmonyLib;
 using MEC;
@@ -104,6 +105,7 @@ namespace CustomGameModes.GameModes
             player.AddAmmo(AmmoType.Nato556, 50);
             EnsureItem(ItemType.GunE11SR);
             EnsureItem(ItemType.ArmorCombat);
+            EnsureItem(ItemType.KeycardO5);
         }
 
         [CrewmateTask(TaskDifficulty.Hard)]
@@ -129,6 +131,8 @@ namespace CustomGameModes.GameModes
                     """, "");
                 yield return Timing.WaitForSeconds(1);
             }
+
+            equipGuardian();
             Manager.ClearPlayerAllowedDoors(player);
         }
 
@@ -143,17 +147,26 @@ namespace CustomGameModes.GameModes
             }
         }
 
+        private FirearmType gun = FirearmType.E11SR;
+        private AttachmentIdentifier flashlightAttachment => AttachmentIdentifier.Get(gun, InventorySystem.Items.Firearms.Attachments.AttachmentName.Flashlight);
+
+        private void equipGuardian()
+        {
+            player.AddAmmo(AmmoType.Nato556, 50);
+            player.CurrentItem = EnsureFirearm(gun, flashlightAttachment);
+            EnsureItem(ItemType.Flashlight);
+            EnsureItem(ItemType.ArmorCombat);
+            EnsureItem(ItemType.KeycardO5);
+        }
+
         private void OnDied(DiedEventArgs ev)
         {
             RemainingLives--;
 
             if (RemainingLives <= 0) return;
 
+            equipGuardian();
             ev.Player.Role.Set(_escapedRole, RoleSpawnFlags.None);
-            player.AddAmmo(AmmoType.Nato556, 50);
-            player.CurrentItem = EnsureFirearm(FirearmType.E11SR);
-            EnsureItem(ItemType.Flashlight);
-            EnsureItem(ItemType.ArmorCombat);
             player.Position = GetFarthestCrewmate()?.Position 
                 ?? ev.Attacker?.Position 
                 ?? SpawnLocationType.Inside173Bottom.GetPosition() + UnityEngine.Vector3.up;
