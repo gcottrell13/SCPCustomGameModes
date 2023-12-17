@@ -159,10 +159,12 @@ namespace CustomGameModes.GameModes
                     FormatTask($"Stand on CUBE for an additional\n{d} seconds", "");
             }
 
+            float heightThreshold = 13.4f;
+
             bool onCube()
             {
                 var in173 = player.CurrentRoom.RoomName == MapGeneration.RoomName.Lcz173;
-                var aboveCube = player.Position.y >= 13.4;
+                var aboveCube = player.Position.y >= heightThreshold;
                 return in173 && aboveCube;
             }
 
@@ -176,10 +178,11 @@ namespace CustomGameModes.GameModes
                     Cube.Rotation = Quaternion.AngleAxis(timeElapsed / timesPerSecond * 90, Vector3.up);
                 }
 
-                if (player.Position.y < 14)
+                if (player.Position.y < heightThreshold)
                     Step.Position = new(Step.Position.x, 11.75f, Step.Position.z);
                 else
-                    Step.Position = new(Step.Position.x, 10f, Step.Position.z);
+                    Step.Position = new(Step.Position.x, 0f, Step.Position.z);
+
                 if (Beast != null && IsNear(Beast, 10))
                 {
                     closeEncounterNearCube = true;
@@ -195,8 +198,6 @@ namespace CustomGameModes.GameModes
         {
             var thingToDieFor = ThingsToDieFor.RandomChoice();
 
-            if (Beast == null) goto Done;
-
             PlayerEvent.Dying += killed;
 
             if (closeEncounterNearCube)
@@ -204,7 +205,7 @@ namespace CustomGameModes.GameModes
                 player.ShowHint("That was a close one, right?", 7);
                 yield return Timing.WaitForSeconds(7);
 
-                if ((Beast.Position - player.Position).magnitude > 20)
+                if (!IsNear(Beast, 20))
                 {
                     player.ShowHint("Well, absence does make the heart grow fonder.", 7);
                     yield return Timing.WaitForSeconds(7);
@@ -224,8 +225,6 @@ namespace CustomGameModes.GameModes
 
             PlayerEvent.Dying -= killed;
             DoneAllTasks = true;
-
-            Done:
 
             ShowTaskCompleteMessage(30);
             yield return Timing.WaitForSeconds(30);

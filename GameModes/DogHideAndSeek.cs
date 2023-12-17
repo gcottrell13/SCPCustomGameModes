@@ -69,7 +69,7 @@ namespace CustomGameModes.GameModes
             PlayerEvent.Hurting += OnHurting;
             PlayerEvent.SearchingPickup += OnSearchingPickup;
             PlayerEvent.DroppingAmmo += DeniableEvent;
-            PlayerEvent.DroppingItem += OnDropItem;
+            //PlayerEvent.DroppingItem += OnDropItem;
             PlayerEvent.PlayerDamageWindow += PlayerDamagingWindow;
 
             ServerEvent.RespawningTeam += DeniableEvent;
@@ -99,7 +99,7 @@ namespace CustomGameModes.GameModes
             PlayerEvent.Hurting -= OnHurting;
             PlayerEvent.SearchingPickup -= OnSearchingPickup;
             PlayerEvent.DroppingAmmo -= DeniableEvent;
-            PlayerEvent.DroppingItem -= OnDropItem;
+            //PlayerEvent.DroppingItem -= OnDropItem;
             PlayerEvent.PlayerDamageWindow -= PlayerDamagingWindow;
 
             ServerEvent.RespawningTeam -= DeniableEvent;
@@ -163,7 +163,7 @@ namespace CustomGameModes.GameModes
             {
                 // allow it
             }
-            else if (e.Pickup.Type.IsAmmo())
+            else if (e.Pickup.Type.IsAmmo() || e.Pickup.Type.IsWeapon())
             {
                 // allow it
             }
@@ -171,26 +171,6 @@ namespace CustomGameModes.GameModes
             {
                 e.IsAllowed = false;
             }
-        }
-
-        private void OnDropItem(DroppingItemEventArgs e)
-        {
-            if (Manager == null) { e.IsAllowed = false; return; }
-            return;
-
-            if (Manager.ItemsToDrop.TryGetValue(e.Player, out var items) && items.Contains(e.Item.Type))
-            {
-                // allow it
-            }
-            else
-            {
-                e.IsAllowed = false;
-            }
-        }
-
-        private void DroppedItem(DroppedItemEventArgs e)
-        {
-            Manager.ClaimedPickups[e.Pickup] = e.Player;
         }
 
         private void OnInteractDoor(InteractingDoorEventArgs ev)
@@ -238,17 +218,6 @@ namespace CustomGameModes.GameModes
                     ev.IsAllowed = false;
                 }
                 if (ev.Attacker?.IsHuman == true && ev.Player.IsHuman)
-                {
-                    ev.IsAllowed = false;
-                }
-            }
-            else if (ev.Attacker != null && Manager.HurtRoles.TryGetValue(ev.Attacker, out var roles) && roles.Contains(ev.Player.Role.Type))
-            {
-                // allow it
-            }
-            else
-            {
-                if (ev.Attacker?.Role.Team == Team.ClassD)
                 {
                     ev.IsAllowed = false;
                 }
@@ -458,7 +427,10 @@ namespace CustomGameModes.GameModes
             }
 
             foreach (var player in Manager.ActiveRoles)
+            {
                 CountdownHelper.AddCountdown(player.player, player.RoundEndBroadcast, TimeSpan.FromSeconds(EndOfRoundTime));
+                player.player.ShowHint(player.RoundEndBroadcast, EndOfRoundTime);
+            }
 
             Manager.StopAll();
 
@@ -473,10 +445,7 @@ namespace CustomGameModes.GameModes
             // ----------------------------------------------------------------------------------------------------------------
             // ----------------------------------------------------------------------------------------------------------------
 
-            if (!Round.EndRound(true))
-            {
-                Log.Error("Round was not successfully forced to end");
-            }
+            Round.Restart(false);
 
             while (true)
             {

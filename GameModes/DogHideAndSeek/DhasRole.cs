@@ -308,6 +308,12 @@ namespace CustomGameModes.GameModes
 
         public bool IsNear(Player p, int distance, out string display)
         {
+            if (p == null)
+            {
+                display = "ERR DIST";
+                return false;
+            }
+
             if (DistanceTo(p) < distance)
             {
                 display = strong($"<color=green>{distance}m</color>");
@@ -472,7 +478,7 @@ namespace CustomGameModes.GameModes
 
             while (NotHasItem(ItemType.KeycardO5, out var item))
             {
-                var compass = player.CurrentRoom.Type != RoomType.Lcz914 ?
+                var compass = player.CurrentRoom?.Type != RoomType.Lcz914 ?
                     GetCompass(Door.Get(DoorType.Scp914Gate).Position) :
                     "";
 
