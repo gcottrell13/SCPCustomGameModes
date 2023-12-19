@@ -33,6 +33,7 @@ namespace CustomGameModes.GameModes
         }
 
         public override string CountdownBroadcast => "The Class-D are hiding!\nYou will be released in:";
+        public override string SickoModeBroadcast => MainGameBroadcast;
         public override string MainGameBroadcast => "Kill Everyone!";
         public override string RoundEndBroadcast => "You Couldn't Kill Everyone =(";
 
@@ -66,13 +67,9 @@ namespace CustomGameModes.GameModes
             var willBeGivenFlashlight = new System.Random().NextDouble() < 0.5;
             var startTime = DateTime.Now;
 
-            while(true)
+        Normal:
+            while(!Manager.BeastSickoModeActivate)
             {
-                if (Manager.BeastSickoModeActivate && Manager.Humans().Count > 0)
-                {
-                    player.ShowHint(GetCompass(GetNearestCrewmate().Position));
-                }
-
                 if (willBeGivenFlashlight && !givenFlashlight && (DateTime.Now - startTime).TotalSeconds > 5 * 60)
                 {
                     givenFlashlight = true;
@@ -81,6 +78,20 @@ namespace CustomGameModes.GameModes
 
                 yield return Timing.WaitForSeconds(1);
             }
+
+        SickoMode:
+            while (Manager.BeastSickoModeActivate)
+            {
+                if (Manager.Humans().Count > 0)
+                {
+                    player.ShowHint($"""
+                        <b><color=orange><size=50>{GetCompass(GetNearestCrewmate().Position)}</size></color></b>
+                        """);
+                }
+
+                yield return Timing.WaitForSeconds(0.5f);
+            }
+            goto Normal;
 
         }
     }

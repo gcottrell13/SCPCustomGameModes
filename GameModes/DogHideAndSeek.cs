@@ -40,7 +40,7 @@ namespace CustomGameModes.GameModes
     {
         Door beastDoor;
         bool beastReleased;
-        bool classDWin = false;
+        bool DidTimeRunOut = false;
         List<Door> LCZDoors = new();
         public static DhasRoleManager Manager;
         bool cassieBeastEscaped = false;
@@ -118,11 +118,10 @@ namespace CustomGameModes.GameModes
                 // If the SCP kills everyone, the coroutine will still be running. Kill it.
                 Timing.KillCoroutines(roundHandlerCO);
             }
-            else if (!Player.List.Any(p => p.Role.Team == Team.SCPs))
-            {
-                // the SCP got disconnected early
-            }
             // else, the Class-D survived long enough.
+
+            Manager.PlayerDied -= onPlayerRoleDied;
+            Manager.PlayerCompleteAllTasks -= onPlayerCompleteAllTasks;
 
             CountdownHelper.Stop();
             Manager.StopAll();
@@ -211,17 +210,12 @@ namespace CustomGameModes.GameModes
         {
             // allow the Class-D to hurt/kill the beast after they win
             // disallow the beast to hurt the Class-D after it loses
-            if (classDWin)
-            {
-                if (ev.Attacker?.Role.Team == Team.SCPs)
-                {
-                    ev.IsAllowed = false;
-                }
-                if (ev.Attacker?.IsHuman == true && ev.Player.IsHuman)
-                {
-                    ev.IsAllowed = false;
-                }
-            }
+
+            if (ev.Player.IsHuman == ev.Attacker?.IsHuman)
+                ev.IsAllowed = false;
+
+            if (DidTimeRunOut && ev.Attacker?.Role.Team == Team.SCPs)
+                ev.IsAllowed = false;
         }
 
         private void Activate914(ActivatingEventArgs ev)
@@ -398,9 +392,24 @@ namespace CustomGameModes.GameModes
                 beast.player.ShowHint("Break Free", 7);
 
             removeTime(0);
+
+            void ActivateBeastSickoMode()
+            {
+                Manager.BeastSickoModeActivate = true;
+                foreach (var room in Room.Get(ZoneType.LightContainment))
+                {
+                    room.TurnOffLights(-1);
+                    room.Color = Color.red;
+                }
+                getBroadcast = p => p.SickoModeBroadcast;
+                removeTime(0);
+            }
+
+
             while (elapsedTime() < timerTotalSeconds)
             {
-                if (timerTotalSeconds - elapsedTime() < 70) Manager.BeastSickoModeActivate = true;
+                if (Manager.BeastSickoModeActivate == false && timerTotalSeconds - elapsedTime() < 70)
+                    ActivateBeastSickoMode();
                 yield return Timing.WaitForSeconds(1);
             }
 
@@ -415,13 +424,14 @@ namespace CustomGameModes.GameModes
             foreach (var room in Room.Get(ZoneType.LightContainment))
             {
                 room.TurnOffLights(-1);
+                room.Color = Color.white;
             }
 
             Cassie.MessageTranslated("The Class D Are Successful", "Class-D Win!");
+            DidTimeRunOut = true;
 
             foreach (var classD in Player.List.Where(x => x.IsHuman))
             {
-                classDWin = true;
                 var item = classD.AddItem(ItemType.MicroHID);
                 classD.CurrentItem = item;
             }

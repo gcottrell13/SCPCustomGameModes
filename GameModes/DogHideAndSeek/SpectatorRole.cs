@@ -27,7 +27,8 @@ namespace CustomGameModes.GameModes
         {
         }
 
-        public override string CountdownBroadcast => "The Class-D are hiding!\nYou will be released in:";
+        public override string CountdownBroadcast => "The Class-D are hiding!";
+        public override string SickoModeBroadcast => MainGameBroadcast;
         public override string MainGameBroadcast => "You Died. Enjoy the show!";
         public override string RoundEndBroadcast => "Round End";
 

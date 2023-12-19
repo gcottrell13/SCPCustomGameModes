@@ -14,7 +14,7 @@ namespace CustomGameModes.Commands
     {
         public string Command => "set-dhas-role";
 
-        public string[] Aliases => Array.Empty<string>();
+        public string[] Aliases => new[] { "dhassr" };
 
         public string Description => "set dhas role";
 

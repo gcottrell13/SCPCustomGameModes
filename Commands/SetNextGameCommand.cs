@@ -13,7 +13,7 @@ namespace CustomGameModes.Commands
     {
         public string Command => "set-next-game";
 
-        public string[] Aliases => Array.Empty<string>();
+        public string[] Aliases => new[] { "sng" };
 
         public string Description => "Sets the next Game mode";
 

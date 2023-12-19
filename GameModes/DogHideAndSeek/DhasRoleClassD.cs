@@ -69,6 +69,8 @@ namespace CustomGameModes.GameModes
 
             while (GoGetPickup(predicate, onFail) && MyTargetPickup != null)
             {
+                if (player.Items.Any(i => i.IsWeapon)) break;
+
                 var compass = GetCompass(MyTargetPickup.Position);
                 FormatTask("Get Yourself a Gun", compass);
                 yield return Timing.WaitForSeconds(0.5f);

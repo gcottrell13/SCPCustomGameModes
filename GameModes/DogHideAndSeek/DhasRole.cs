@@ -68,6 +68,7 @@ namespace CustomGameModes.GameModes
         }
 
         public virtual string CountdownBroadcast => "Releasing the Beast from GR-18 in: ❤";
+        public virtual string SickoModeBroadcast => "The Beast can Smell You Now! Run!";
         public virtual string MainGameBroadcast => "Do your tasks and Survive!";
         public virtual string RoundEndBroadcast => "You Win!\nKill The Beast!";
 
