@@ -23,5 +23,9 @@ namespace CustomGameModes.Configs
             "Normal",
             "Normal",
         };
+
+        [Description("In Normal, % chance of upgrading player with SCP 5000")]
+        public int Scp5000Chance { get; set; } = 5;
+
     }
 }
