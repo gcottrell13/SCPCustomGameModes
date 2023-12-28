@@ -203,7 +203,6 @@ namespace CustomGameModes.GameModes
         {
             var inZone = Pickup.List.Where(
                 p => p.Room?.Zone == player.CurrentRoom?.Zone
-                && p.Room.Type != RoomType.LczPlants
             );
             var validPickups = new List<Pickup>();
 

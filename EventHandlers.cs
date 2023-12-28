@@ -19,6 +19,11 @@ namespace CustomGameModes
     {
         public static IGameMode CurrentGame;
 
+        ~EventHandlers()
+        {
+            UnregisterEvents();
+        }
+
         public static Dictionary<string, Func<IGameMode>> GameList = new()
         {
             { nameof(DogHideAndSeek), () => new DogHideAndSeek() },
@@ -38,6 +43,8 @@ namespace CustomGameModes
             ServerEvent.RoundStarted -= OnRoundStarted;
             ServerEvent.RoundEnded -= OnRoundEnded;
             ServerEvent.WaitingForPlayers -= WaitingForPlayers;
+
+            CurrentGame?.OnRoundEnd();
         }
 
         private static void WaitingForPlayers()

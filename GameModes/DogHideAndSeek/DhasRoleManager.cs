@@ -64,6 +64,8 @@ namespace CustomGameModes.GameModes
                 DhasRoleMadman.name,
                 DhasRoleClassD.name,
                 DhasRoleDaredevil.name,
+                DhasRoleGuardian.name,
+                DhasRoleScientist.name,
                 DhasRoleClassD.name,
                 DhasRoleClinger.name,
                 DhasRoleDaredevil.name,

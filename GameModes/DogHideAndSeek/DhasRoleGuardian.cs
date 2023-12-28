@@ -168,7 +168,6 @@ namespace CustomGameModes.GameModes
             equipGuardian();
             ev.Player.Role.Set(_escapedRole, RoleSpawnFlags.None);
             player.Position = GetFarthestCrewmate()?.Position 
-                ?? ev.Attacker?.Position 
                 ?? SpawnLocationType.Inside173Bottom.GetPosition() + UnityEngine.Vector3.up;
         }
 

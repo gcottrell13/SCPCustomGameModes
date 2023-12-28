@@ -60,6 +60,11 @@ namespace CustomGameModes.GameModes
         {
         }
 
+        ~DogHideAndSeek()
+        {
+            OnRoundEnd();
+        }
+
         public void OnRoundStart()
         {
             // -------------------------------------------------------------
@@ -292,6 +297,11 @@ namespace CustomGameModes.GameModes
             LCZDoors = Door.Get(door => door.Zone == ZoneType.LightContainment).ToList();
 
             beastDoor = Room.Get(RoomType.LczGlassBox).Doors.First(d => d.Rooms.Count == 1 && !d.IsGate);
+
+            foreach (var vtWindow in Room.Get(RoomType.LczPlants).Windows)
+            {
+                vtWindow.BreakWindow();
+            }
 
             var doorsDoNotOpen = new HashSet<Door>()
             {
