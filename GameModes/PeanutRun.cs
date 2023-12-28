@@ -10,12 +10,20 @@ using Exiled.API.Features;
 using MEC;
 using Exiled.Events.EventArgs.Interfaces;
 using UnityEngine;
+using InventorySystem.Items.Usables.Scp330;
+using Exiled.API.Features.Items;
+using MapGeneration;
 
 namespace CustomGameModes.GameModes
 {
     internal class PeanutRun : IGameMode
     {
         CoroutineHandle roundLoop;
+
+        ~PeanutRun()
+        {
+            OnRoundEnd();
+        }
 
         public void OnRoundStart()
         {
@@ -62,6 +70,15 @@ namespace CustomGameModes.GameModes
                 };
 
                 setup(players[i]);
+            }
+
+            foreach (var hczRoom in Room.Get(Exiled.API.Enums.ZoneType.HeavyContainment))
+            {
+                hczRoom.TurnOffLights(9999f);
+            }
+            foreach (var ezRoom in Room.Get(Exiled.API.Enums.ZoneType.Entrance))
+            {
+                ezRoom.TurnOffLights(9999f);
             }
 
             while (true)
@@ -135,10 +152,14 @@ namespace CustomGameModes.GameModes
 
         public void SetupClassD(Player player)
         {
+
             player.Role.Set(PlayerRoles.RoleTypeId.ClassD, PlayerRoles.RoleSpawnFlags.UseSpawnpoint);
             player.ClearInventory();
             player.CurrentItem = player.AddItem(ItemType.KeycardO5);
-            player.AddItem(ItemType.SCP207, 4);
+            player.AddItem(ItemType.Lantern);
+            player.AddItem(ItemType.SCP207, 3);
+            player.AddItem(ItemType.SCP500, 1);
+            player.TryAddCandy(CandyKindID.Pink);
 
             Timing.CallDelayed(15, () => ShowClassDStartupMessage(player));
         }
