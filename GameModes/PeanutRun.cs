@@ -1,4 +1,4 @@
-using Exiled.Events.EventArgs.Player;
+﻿using Exiled.Events.EventArgs.Player;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +13,10 @@ using UnityEngine;
 using InventorySystem.Items.Usables.Scp330;
 using Exiled.API.Features.Items;
 using MapGeneration;
+using PlayerRoles;
+using Exiled.API.Enums;
+using Exiled.API.Features.Roles;
+using Exiled.API.Extensions;
 
 namespace CustomGameModes.GameModes
 {
@@ -21,6 +25,9 @@ namespace CustomGameModes.GameModes
         public string Name => "Zombies";
 
         CoroutineHandle roundLoop;
+
+        const RoleTypeId SCPROLE = RoleTypeId.Scp0492;
+        static Vector3 SCPSpawnPoint = RoleTypeId.Scp049.GetRandomSpawnLocation().Position;
 
         ~PeanutRun()
         {
@@ -66,19 +73,20 @@ namespace CustomGameModes.GameModes
             {
                 Action<Player> setup = i switch
                 {
-                    0 => SetupSCP173,
-                    1 => players.Count > 3 ? SetupSCP173 : SetupClassD,
+                    0 => SetupSCP,
+                    1 => SetupClassD,
+                    2 => SetupSCP,
                     _ => SetupClassD,
                 };
 
                 setup(players[i]);
             }
 
-            foreach (var hczRoom in Room.Get(Exiled.API.Enums.ZoneType.HeavyContainment))
+            foreach (var hczRoom in Room.Get(ZoneType.HeavyContainment))
             {
                 hczRoom.TurnOffLights(9999f);
             }
-            foreach (var ezRoom in Room.Get(Exiled.API.Enums.ZoneType.Entrance))
+            foreach (var ezRoom in Room.Get(ZoneType.Entrance))
             {
                 ezRoom.TurnOffLights(9999f);
             }
@@ -86,13 +94,13 @@ namespace CustomGameModes.GameModes
             while (true)
             {
 
-            PeanutHUD:
+            SCPHUD:
                 {
                     var humans = Player.Get(p => p.IsHuman).ToList();
-                    var inLcz = humans.Where(p => p.Zone == Exiled.API.Enums.ZoneType.LightContainment).Count();
-                    var inHcz = humans.Where(p => p.Zone == Exiled.API.Enums.ZoneType.HeavyContainment).Count();
-                    var inEz = humans.Where(p => p.Zone == Exiled.API.Enums.ZoneType.Entrance).Count();
-                    var inSurface = humans.Where(p => p.Zone == Exiled.API.Enums.ZoneType.Surface).Count();
+                    var inLcz = humans.Where(p => p.Zone == ZoneType.LightContainment).Count();
+                    var inHcz = humans.Where(p => p.Zone == ZoneType.HeavyContainment).Count();
+                    var inEz = humans.Where(p => p.Zone == ZoneType.Entrance || p.CurrentRoom.Type == RoomType.HczEzCheckpointA || p.CurrentRoom.Type == RoomType.HczEzCheckpointB).Count();
+                    var inSurface = humans.Where(p => p.Zone == ZoneType.Surface).Count();
 
                     IEnumerable<string> lines()
                     {
@@ -104,7 +112,7 @@ namespace CustomGameModes.GameModes
 
                     var message = string.Join(" | ", lines());
 
-                    foreach (var scp in Player.Get(p => p.Role.Team == PlayerRoles.Team.SCPs))
+                    foreach (var scp in Player.Get(p => p.Role.Team == Team.SCPs))
                     {
                         scp.Broadcast(2, $"""
                             Where to Find the Class-Ds:
@@ -115,12 +123,12 @@ namespace CustomGameModes.GameModes
 
             ChaosHUD:
                 {
-                    var chaosPlayers = Player.Get(p => p.Role.Team == PlayerRoles.Team.ChaosInsurgency).ToList();
+                    var chaosPlayers = Player.Get(p => p.Role.Team == Team.ChaosInsurgency).ToList();
 
                     if (chaosPlayers.Count > 0)
                     {
                         var scpCount = Player.Get(p => p.IsScp).Count();
-                        var cdCount = Player.Get(p => p.Role.Type == PlayerRoles.RoleTypeId.ClassD).Count();
+                        var cdCount = Player.Get(p => p.Role.Type == RoleTypeId.ClassD).Count();
                         var scpMsg = $"<color=red>SCPs</color>: {scpCount}";
                         var cdMsg = $"<color=orange>Class-D</color>: {cdCount}";
                         foreach (var ci in chaosPlayers)
@@ -137,9 +145,12 @@ namespace CustomGameModes.GameModes
         //-----------------------------------------------------------------------------------------------------------------------------------
         //-----------------------------------------------------------------------------------------------------------------------------------
 
-        public void SetupSCP173(Player scp)
+        void SetupSCP(Player scp) => SetupSCP(scp, SCPROLE);
+
+        public void SetupSCP(Player scp, RoleTypeId role)
         {
-            scp.Role.Set(PlayerRoles.RoleTypeId.Scp173, PlayerRoles.RoleSpawnFlags.UseSpawnpoint);
+            scp.Role.Set(role, RoleSpawnFlags.None);
+            scp.Teleport(SCPSpawnPoint);
 
             if (Round.EscapedDClasses > 0)
             {
@@ -154,14 +165,12 @@ namespace CustomGameModes.GameModes
 
         public void SetupClassD(Player player)
         {
-
-            player.Role.Set(PlayerRoles.RoleTypeId.ClassD, PlayerRoles.RoleSpawnFlags.UseSpawnpoint);
+            player.Role.Set(RoleTypeId.ClassD, RoleSpawnFlags.UseSpawnpoint);
             player.ClearInventory();
             player.CurrentItem = player.AddItem(ItemType.KeycardO5);
             player.AddItem(ItemType.Lantern);
             player.AddItem(ItemType.SCP207, 3);
             player.AddItem(ItemType.SCP500, 1);
-            player.TryAddCandy(CandyKindID.Pink);
 
             Timing.CallDelayed(15, () => ShowClassDStartupMessage(player));
         }
@@ -171,9 +180,18 @@ namespace CustomGameModes.GameModes
 
         public void PrepareSCPAfterEscape(Player scp)
         {
-            scp.MaxHealth = 1;
-            scp.Health = 1;
-            scp.MaxArtificialHealth = 0;
+            if (scp.Role == RoleTypeId.Scp0492)
+            {
+                scp.MaxHealth = 100;
+                scp.Health = 100;
+                scp.MaxArtificialHealth = 0;
+            }
+            else
+            {
+                scp.MaxHealth = 1;
+                scp.Health = 1;
+                scp.MaxArtificialHealth = 0;
+            }
         }
 
         public void ShowEscapedMessage(Player scp)
@@ -213,11 +231,11 @@ namespace CustomGameModes.GameModes
         {
             if (ev.Player.IsHuman)
             {
-                if (ev.Attacker?.Role.Type == PlayerRoles.RoleTypeId.Scp173)
+                if (ev.Attacker?.Role.Team == Team.SCPs)
                 {
                     Timing.CallDelayed(0.5f, () =>
                     {
-                        SetupSCP173(ev.Player);
+                        SetupSCP(ev.Player, ev.Attacker.Role);
                         ev.Player.Teleport(ev.Attacker.Position);
                     });
                 }
@@ -226,7 +244,7 @@ namespace CustomGameModes.GameModes
 
         public void OnEscape(EscapingEventArgs e)
         {
-            foreach (var scp in Player.List.Where(p => p.Role.Type == PlayerRoles.RoleTypeId.Scp173))
+            foreach (var scp in Player.List.Where(p => p.Role == SCPROLE))
             {
                 PrepareSCPAfterEscape(scp);
                 ShowEscapedMessage(scp);
