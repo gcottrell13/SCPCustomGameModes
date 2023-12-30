@@ -1,4 +1,4 @@
-using CustomGameModes.API;
+﻿using CustomGameModes.API;
 using Exiled.API.Enums;
 using Exiled.API.Extensions;
 using Exiled.API.Features;
@@ -141,41 +141,44 @@ namespace CustomGameModes.GameModes
 
         #region Event Handlers
 
-        private void PlayerDamagingWindow(DamagingWindowEventArgs e)
+        private void PlayerDamagingWindow(DamagingWindowEventArgs ev)
         {
-            if (e.Player.Role.Team == Team.SCPs && beastReleased)
+            if (ev.Player.Role.Team == Team.SCPs)
             {
-                if (!cassieBeastEscaped)
+                if (!beastReleased)
+                {
+                    DeniableEvent(ev);
+                }
+                else if (!cassieBeastEscaped)
                 {
                     cassieBeastEscaped = true;
                     Cassie.MessageTranslated("S C P 9 3 9 has escaped containment", "SCP-939 Has Escaped Containment");
                 }
             }
-            else
-            {
-                e.IsAllowed = false;
-            }
         }
 
-        private void OnSearchingPickup(SearchingPickupEventArgs e)
+        private void OnSearchingPickup(SearchingPickupEventArgs ev)
         {
-            if (Manager == null) { e.IsAllowed = false; return; }
-            if (Manager.ClaimedPickups.TryGetValue(e.Pickup, out var assignedPlayer) && e.Player == assignedPlayer)
-            {
-                // allow it
-                Manager.ClaimedPickups.Remove(e.Pickup);
-            }
-            else if (e.Pickup.PreviousOwner == e.Player)
+            if (Manager == null) { ev.IsAllowed = false; return; }
+            if (Manager.ClaimedPickups.TryGetValue(ev.Pickup, out var assignedPlayer) && ev.Player == assignedPlayer)
             {
                 // allow it
             }
-            else if (e.Pickup.Type.IsAmmo() || e.Pickup.Type.IsWeapon())
+            else if (ev.Pickup.PreviousOwner == ev.Player)
+            {
+                // allow it
+            }
+            else if (ev.Pickup.Type.IsAmmo() || ev.Pickup.Type.IsWeapon())
+            {
+                // allow it
+            }
+            else if (Manager.ClaimedPickups.ContainsKey(ev.Pickup) == false)
             {
                 // allow it
             }
             else
             {
-                e.IsAllowed = false;
+                DeniableEvent(ev);
             }
         }
 
@@ -190,16 +193,16 @@ namespace CustomGameModes.GameModes
                 }
                 else
                 {
-                    ev.IsAllowed = false;
+                    DeniableEvent(ev);
                 }
             }
             else if (ev.Door == beastDoor || ev.Door.Zone != ZoneType.LightContainment)
             {
-                ev.IsAllowed = false;
+                DeniableEvent(ev);
             }
             else if (Room.Get(RoomType.LczArmory).Doors.Contains(ev.Door) && ev.Door.IsOpen)
             {
-                ev.IsAllowed = false;
+                DeniableEvent(ev);
             }
             else
             {
@@ -219,16 +222,18 @@ namespace CustomGameModes.GameModes
             // disallow the beast to hurt the Class-D after it loses
 
             if (ev.Player.IsHuman == ev.Attacker?.IsHuman)
-                ev.IsAllowed = false;
+                DeniableEvent(ev);
 
             if (DidTimeRunOut && ev.Attacker?.Role.Team == Team.SCPs)
-                ev.IsAllowed = false;
+                DeniableEvent(ev);
         }
 
         private void Activate914(ActivatingEventArgs ev)
         {
-            if (Manager == null) { ev.IsAllowed = false; return; }
-            if (!Manager.AllowedToUse914.Contains(ev.Player)) { ev.IsAllowed = false; return; };
+            if (Manager == null)
+                DeniableEvent(ev);
+            if (!Manager.AllowedToUse914.Contains(ev.Player))
+                DeniableEvent(ev);
         }
 
         private void UpgradePickup(UpgradingPickupEventArgs ev)
@@ -238,14 +243,26 @@ namespace CustomGameModes.GameModes
             if (InventoryItemLoader.AvailableItems.TryGetValue(ev.Pickup.Type, out var value) && value.TryGetComponent<Scp914ItemProcessor>(out var processor))
             {
                 var newPickupBase = processor.OnPickupUpgraded(ev.KnobSetting, ev.Pickup.Base, ev.OutputPosition);
+
+                if (newPickupBase == null)
+                {
+                    ev.Pickup.Position = ev.OutputPosition;
+                    DeniableEvent(ev);
+                    return;
+                }
+
                 var newPickup = Pickup.Get(newPickupBase);
-                Manager.ClaimedPickups.Remove(ev.Pickup);
                 Manager.ClaimedPickups[newPickup] = ev.Pickup.PreviousOwner;
                 if (newPickup != ev.Pickup)
+                {
+                    Manager.ClaimedPickups.Remove(ev.Pickup);
                     ev.Pickup.Destroy();
+                }
+
                 Log.Info($"914 created {newPickup.Type}");
             }
-            ev.IsAllowed = false;
+
+            DeniableEvent(ev);
         }
 
         public void DeniableEvent(IDeniableEvent ev)
@@ -280,6 +297,10 @@ namespace CustomGameModes.GameModes
         private IEnumerator<float> _roundHandle()
         {
             List<Player> players = Player.List.ToList();
+            players.ShuffleList();
+            players.ShuffleList();
+            players.ShuffleList();
+            players.ShuffleList();
             players.ShuffleList();
 
             Log.Debug("Starting a new game");
@@ -410,7 +431,7 @@ namespace CustomGameModes.GameModes
                 Manager.BeastSickoModeActivate = true;
                 foreach (var room in Room.Get(ZoneType.LightContainment))
                 {
-                    room.TurnOffLights(-1);
+                    room.TurnOffLights(0);
                     room.Color = Color.red;
                 }
                 getBroadcast = p => p.SickoModeBroadcast;
@@ -435,7 +456,7 @@ namespace CustomGameModes.GameModes
 
             foreach (var room in Room.Get(ZoneType.LightContainment))
             {
-                room.TurnOffLights(-1);
+                room.TurnOffLights(0);
                 room.Color = Color.white;
             }
 
@@ -451,7 +472,13 @@ namespace CustomGameModes.GameModes
             foreach (var player in Manager.ActiveRoles)
             {
                 CountdownHelper.AddCountdown(player.player, player.RoundEndBroadcast, TimeSpan.FromSeconds(EndOfRoundTime));
-                player.player.ShowHint(player.RoundEndBroadcast, EndOfRoundTime);
+                player.player.ShowHint($"""
+                    <size=60><b>{player.RoundEndBroadcast}</b></size>
+
+
+
+
+                    """, EndOfRoundTime);
             }
 
             Manager.StopAll();
