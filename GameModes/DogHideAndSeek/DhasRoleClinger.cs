@@ -45,31 +45,6 @@ namespace CustomGameModes.GameModes
         }
 
 
-        int requiredFriendDistance = 5;
-        bool completedTask = false;
-        void OnSomeoneCompleteTask(Player p)
-        {
-            if ((player.Position - p.Position).magnitude < requiredFriendDistance)
-                completedTask = true;
-        }
-
-        [CrewmateTask(TaskDifficulty.Medium)]
-        private IEnumerator<float> BeNearWhenTaskComplete()
-        {
-            Manager.PlayerCompleteOneTask += OnSomeoneCompleteTask;
-
-            while (!completedTask)
-            {
-                var nearest = GetNearestCrewmate();
-                IsNear(nearest, requiredFriendDistance, out var dist);
-
-                FormatTask($"Be Near Someone ({dist}) When\nThey Complete a Task", "");
-                yield return Timing.WaitForSeconds(1);
-            }
-
-            Manager.PlayerCompleteOneTask -= OnSomeoneCompleteTask;
-        }
-
 
         Player playerA;
         Player playerB;
@@ -92,7 +67,7 @@ namespace CustomGameModes.GameModes
             }
 
         Condolences:
-            if (playerA.IsDead)
+            if (playerA?.IsDead == true)
             {
                 player.ShowHint($"{PlayerNameFmt(playerA)} has died. Condolences.", 5);
                 yield return Timing.WaitForSeconds(5);
@@ -130,7 +105,7 @@ namespace CustomGameModes.GameModes
             }
 
         Condolences:
-            if (playerB.IsDead)
+            if (playerB?.IsDead == true)
             {
                 player.ShowHint($"{PlayerNameFmt(playerB)} has died. Condolences.", 5);
                 yield return Timing.WaitForSeconds(5);

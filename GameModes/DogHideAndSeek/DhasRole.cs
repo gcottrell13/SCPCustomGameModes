@@ -310,17 +310,12 @@ namespace CustomGameModes.GameModes
 
         public bool IsNear(Player p, int distance, out string display)
         {
-            if (p == null)
-            {
-                display = "ERR DIST";
-                return false;
-            }
-
-            if (DistanceTo(p) < distance)
+            if (p != null && DistanceTo(p) < distance)
             {
                 display = strong($"<color=green>{distance}m</color>");
                 return true;
             }
+
             display = $"{distance}m";
             return false;
         }
@@ -469,8 +464,7 @@ namespace CustomGameModes.GameModes
 
         #endregion
 
-        #region Timing Task
-
+        #region Tasks
 
         protected ItemType MyKeycardType;
         [CrewmateTask(TaskDifficulty.Hard)]
@@ -484,23 +478,48 @@ namespace CustomGameModes.GameModes
                     GetCompass(Door.Get(DoorType.Scp914Gate).Position) :
                     "";
 
-                FormatTask("Upgrade Your Keycard to <b><color=orange>O5</color></b>", compass);
+                FormatTask("Max Upgrade Your Keycard to <b>O5</b>", compass);
                 yield return Timing.WaitForSeconds(1);
             }
 
             CannotUse914();
         }
 
-        #endregion
 
-
-        protected IEnumerable<float> enumerate(IEnumerator<float> iterator)
+        protected int requiredFriendDistance = 5;
+        bool friendCompletedTask = false;
+        protected void OnSomeoneCompleteTask(Player p)
         {
-            while (iterator.MoveNext())
-            {
-                yield return iterator.Current;
-            }
+            if ((player.Position - p.Position).magnitude < requiredFriendDistance)
+                friendCompletedTask = true;
         }
+        [CrewmateTask(TaskDifficulty.Medium)]
+        protected IEnumerator<float> BeNearWhenTaskComplete()
+        {
+            Manager.PlayerCompleteOneTask += OnSomeoneCompleteTask;
+            friendCompletedTask = false;
+            while (!friendCompletedTask)
+            {
+                var compass = "";
+                var nearest = GetNearestCrewmate();
+                if (nearest == null)
+                {
+                    compass = "<i>There's nobody nearby</i>";
+                }
+
+                IsNear(nearest, requiredFriendDistance, out var dist);
+
+                FormatTask($"""
+                    Be Near Someone ({dist}) When
+                    They Complete a Task
+                    """, compass);
+                yield return Timing.WaitForSeconds(1);
+            }
+
+            Manager.PlayerCompleteOneTask -= OnSomeoneCompleteTask;
+        }
+
+        #endregion
 
         public string TaskSuccessMessage => strong("<size=40><color=green>Task Complete!</color></size>");
 

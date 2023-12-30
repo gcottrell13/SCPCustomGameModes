@@ -25,7 +25,7 @@ namespace CustomGameModes.GameModes
         {
             GetAKeycard,
             UpgradeKeycard,
-            GetAGun,
+            BeNearWhenTaskComplete,
             ShootSomeone,
         };
 
@@ -61,23 +61,6 @@ namespace CustomGameModes.GameModes
             MyKeycardType = myCard.Type;
         }
 
-        [CrewmateTask(TaskDifficulty.Medium)]
-        private IEnumerator<float> GetAGun()
-        {
-            bool predicate(Pickup pickup) => pickup.Type.IsWeapon();
-            void onFail() { player.CurrentItem = player.AddItem(ItemType.GunCOM15); }
-
-            while (GoGetPickup(predicate, onFail) && MyTargetPickup != null)
-            {
-                if (player.Items.Any(i => i.IsWeapon)) break;
-
-                var compass = GetCompass(MyTargetPickup.Position);
-                FormatTask("Get Yourself a Gun", compass);
-                yield return Timing.WaitForSeconds(0.5f);
-            }
-        }
-
-
         bool hurtBeast = false;
 
         [CrewmateTask(TaskDifficulty.Medium)]
@@ -99,7 +82,7 @@ namespace CustomGameModes.GameModes
 
         private void Hurting(HurtingEventArgs ev)
         {
-            if (ev.Player.Role.Type == RoleTypeId.Scp939 && ev.Attacker == player) {
+            if (ev.Player.Role.Type == RoleTypeId.Scp939 && ev.Attacker == player && ev.DamageHandler?.Type.IsWeapon() == true) {
                 hurtBeast = true;
             }
         }
