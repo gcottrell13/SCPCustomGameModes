@@ -32,8 +32,8 @@ namespace CustomGameModes.GameModes
 
         public override List<dhasTask> Tasks => new()
         {
-            TouchAllClassDDoors,
             ThrowGhostlights,
+            TouchAllClassDDoors,
             NoFlashlight,
             BeNearBeast,
         };
@@ -143,7 +143,7 @@ namespace CustomGameModes.GameModes
         [CrewmateTask(TaskDifficulty.Easy)]
         private IEnumerator<float> ThrowGhostlights()
         {
-            var requiredRoomCount = 10;
+            var requiredRoomCount = 6;
             player.CurrentItem = player.AddItem(ItemType.SCP2176);
 
             PlayerEvent.UsedItem += ghostlightUse;
@@ -152,7 +152,7 @@ namespace CustomGameModes.GameModes
             while (GhostlightsThrown.Count < requiredRoomCount)
             {
                 var diff = requiredRoomCount - GhostlightsThrown.Count;
-                FormatTask($"Throw scp2176 in {strong(diff)} Unique rooms", "");
+                FormatTask($"Throw scp2176 from {strong(diff)} Unique rooms", "");
                 yield return Timing.WaitForSeconds(1);
             }
 
@@ -163,7 +163,7 @@ namespace CustomGameModes.GameModes
         [CrewmateTask(TaskDifficulty.Hard)]
         private IEnumerator<float> BeNearBeast()
         {
-            var mustRunSeconds = 2f;
+            var mustRunSeconds = 3f;
             var timeElapsed = 0f;
 
             void hint()
@@ -174,11 +174,9 @@ namespace CustomGameModes.GameModes
                     FormatTask($"Be near for an additional\n{mustRunSeconds - timeElapsed} seconds", HotAndColdToBeast());
             }
 
-            bool predicate() => (player.Position - Beast.Position).sqrMagnitude < 100;
-
-            while (timeElapsed < mustRunSeconds)
+            while (timeElapsed < mustRunSeconds && Beast != null)
             {
-                if (predicate()) timeElapsed += 0.5f;
+                if (IsNear(Beast, 10)) timeElapsed += 0.5f;
                 hint();
                 yield return Timing.WaitForSeconds(0.5f);
             }
