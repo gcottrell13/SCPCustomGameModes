@@ -1,4 +1,4 @@
-﻿using Exiled.API.Enums;
+using Exiled.API.Enums;
 using Exiled.API.Features;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
@@ -76,6 +76,8 @@ namespace CustomGameModes.GameModes
         {
             var item = player.AddItem(ItemType.Flashlight);
             player.CurrentItem = item;
+            EnsureFirearm(FirearmType.Com15);
+            player.AddAmmo(FirearmType.Com15, 10);
         }
 
 
