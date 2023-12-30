@@ -20,6 +20,8 @@ namespace CustomGameModes.GameModes
 {
     internal class NormalSCPSL : IGameMode
     {
+        public string Name => "Normal";
+
         SCP5000Handler SCP5000Handler { get; set; }
         ClassDStarterInventory ClassDStarterInventory { get; set; }
 

@@ -40,7 +40,7 @@ namespace CustomGameModes.Commands
 
             foreach (var player in Player.List)
             {
-                player.Broadcast(new($"Next game is {name}", 5));
+                player.Broadcast(new($"Next game is {EventHandlers.CurrentGame.Name}", 5), shouldClearPrevious: true);
             }
 
             response = $"Set current game: {name}";

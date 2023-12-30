@@ -10,14 +10,19 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using UnityEngine;
 using ServerEvent = Exiled.Events.Handlers.Server;
+using PlayerEvent = Exiled.Events.Handlers.Player;
+using Exiled.Events.EventArgs.Player;
+using Exiled.API.Features.Doors;
 
 namespace CustomGameModes
 {
     internal class EventHandlers
     {
         public static IGameMode CurrentGame;
+        public static bool IsLobby => !Round.IsStarted && !Round.IsEnded;
 
         ~EventHandlers()
         {
@@ -28,18 +33,22 @@ namespace CustomGameModes
         {
             { nameof(DogHideAndSeek), () => new DogHideAndSeek() },
             { nameof(PeanutRun), () => new PeanutRun() },
-            { "Normal", () =>new NormalSCPSL() },
+            { "Normal", () => new NormalSCPSL() },
         };
 
-        internal static void RegisterEvents()
+        internal void RegisterEvents()
         {
+            PlayerEvent.Spawned += OnSpawned;
+
             ServerEvent.RoundStarted += OnRoundStarted;
             ServerEvent.RoundEnded += OnRoundEnded;
             ServerEvent.WaitingForPlayers += WaitingForPlayers;
         }
 
-        internal static void UnregisterEvents()
+        internal void UnregisterEvents()
         {
+            PlayerEvent.Spawned -= OnSpawned;
+
             ServerEvent.RoundStarted -= OnRoundStarted;
             ServerEvent.RoundEnded -= OnRoundEnded;
             ServerEvent.WaitingForPlayers -= WaitingForPlayers;
@@ -47,7 +56,7 @@ namespace CustomGameModes
             CurrentGame?.OnRoundEnd();
         }
 
-        private static void WaitingForPlayers()
+        private void WaitingForPlayers()
         {
             CurrentGame?.OnRoundEnd();
             CurrentGame?.OnWaitingForPlayers();
@@ -55,7 +64,7 @@ namespace CustomGameModes
             GetNextRandomGame();
         }
 
-        private static void OnRoundStarted()
+        private void OnRoundStarted()
         {
             Timing.CallDelayed(
                 0.1f,
@@ -67,12 +76,19 @@ namespace CustomGameModes
 
         }
 
-        private static void OnRoundEnded(RoundEndedEventArgs @event)
+        private void OnSpawned(SpawnedEventArgs ev)
+        {
+            if (!IsLobby) return;
+
+            ev.Player.Broadcast(new($"Next game is {CurrentGame?.Name}", 15));
+        }
+
+        private void OnRoundEnded(RoundEndedEventArgs @event)
         {
             CurrentGame?.OnRoundEnd();
         }
 
-        public static void GetNextRandomGame()
+        public void GetNextRandomGame()
         {
             var pool = CustomGameModes.Singleton.Config.GameModes;
 
@@ -94,6 +110,11 @@ namespace CustomGameModes
             }
 
             CurrentGame = gameConstructor();
+
+            foreach (var player in Player.List)
+            {
+                player.Broadcast(new($"Next game is {game}", 15));
+            }
         }
     }
 }

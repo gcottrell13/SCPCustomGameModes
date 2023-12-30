@@ -1,4 +1,4 @@
-﻿using Exiled.Events.EventArgs.Player;
+using Exiled.Events.EventArgs.Player;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,6 +18,8 @@ namespace CustomGameModes.GameModes
 {
     internal class PeanutRun : IGameMode
     {
+        public string Name => "Zombies";
+
         CoroutineHandle roundLoop;
 
         ~PeanutRun()

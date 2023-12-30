@@ -9,6 +9,8 @@ namespace CustomGameModes.GameModes
 {
     internal interface IGameMode
     {
+        string Name { get; }
+
         void OnRoundStart();
         void OnRoundEnd();
 

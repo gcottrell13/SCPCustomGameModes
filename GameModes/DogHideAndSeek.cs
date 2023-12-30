@@ -1,4 +1,4 @@
-﻿using CustomGameModes.API;
+using CustomGameModes.API;
 using Exiled.API.Enums;
 using Exiled.API.Extensions;
 using Exiled.API.Features;
@@ -38,6 +38,8 @@ namespace CustomGameModes.GameModes
 {
     internal class DogHideAndSeek : IGameMode
     {
+        public string Name => "DogHideAndSeek";
+
         Door beastDoor;
         bool beastReleased;
         bool DidTimeRunOut = false;

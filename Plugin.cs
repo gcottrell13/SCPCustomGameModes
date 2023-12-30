@@ -17,17 +17,20 @@ namespace CustomGameModes
     {
         public static CustomGameModes Singleton;
 
+        EventHandlers handlers;
+
         public override void OnEnabled()
         {
             Singleton = this;
-            EventHandlers.RegisterEvents();
+            handlers = new EventHandlers();
+            handlers.RegisterEvents();
             base.OnEnabled();
         }
 
         public override void OnDisabled()
         {
             Singleton = null;
-            EventHandlers.UnregisterEvents();
+            handlers?.UnregisterEvents();
             base.OnDisabled();
         }
 
