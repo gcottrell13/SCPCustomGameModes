@@ -63,19 +63,9 @@ namespace CustomGameModes.GameModes
         [CrewmateTask(TaskDifficulty.None)]
         public IEnumerator<float> KillEveryone()
         {
-            var givenFlashlight = false;
-            var willBeGivenFlashlight = new System.Random().NextDouble() < 0.5;
-            var startTime = DateTime.Now;
-
         Normal:
             while(!Manager.BeastSickoModeActivate)
             {
-                if (willBeGivenFlashlight && !givenFlashlight && (DateTime.Now - startTime).TotalSeconds > 5 * 60)
-                {
-                    givenFlashlight = true;
-                    player.CurrentItem = EnsureItem(ItemType.Flashlight);
-                }
-
                 yield return Timing.WaitForSeconds(1);
             }
 
@@ -84,9 +74,11 @@ namespace CustomGameModes.GameModes
             {
                 if (Manager.Humans().Count > 0)
                 {
-                    player.ShowHint($"""
-                        <b><color=orange><size=50>{GetCompass(GetNearestCrewmate().Position)}</size></color></b>
-                        """);
+                    var c = GetNearestCrewmate();
+                    FormatTask(
+                        $"Kill {PlayerNameFmt(c)}", 
+                        $"<b><color=orange><size=50>{GetCompass(c.Position)}</size></color></b>"
+                        );
                 }
 
                 yield return Timing.WaitForSeconds(0.5f);
