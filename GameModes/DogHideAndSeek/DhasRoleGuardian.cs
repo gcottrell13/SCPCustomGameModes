@@ -100,12 +100,6 @@ namespace CustomGameModes.GameModes
             {
                 door.IsOpen = false;
             }
-
-            player.Role.Set(_escapedRole, RoleSpawnFlags.None);
-            player.AddAmmo(AmmoType.Nato556, 50);
-            EnsureItem(ItemType.GunE11SR);
-            EnsureItem(ItemType.ArmorCombat);
-            EnsureItem(ItemType.KeycardO5);
         }
 
         [CrewmateTask(TaskDifficulty.Hard)]
@@ -118,21 +112,37 @@ namespace CustomGameModes.GameModes
             PlayerEvent.Hurting += Hurting;
             PlayerEvent.Died += OnDied;
 
+            equipGuardian();
+            yield return Timing.WaitForSeconds(15f);
+
+            yield return WaitHint("Go Back Downstairs and Protect your Teammates!", 10f);
+
+            var message = "Protect your Teammates";
+            bool didResetToOneLife = false;
             RemainingLives = 5;
 
             while (IsRunning)
             {
+                if (!didResetToOneLife)
+                {
+                    if (OtherCrewmates.Count == 0)
+                    {
+                        didResetToOneLife = true;
+                        message = "Your Teammates are all Dead!";
+                        RemainingLives = 1;
+                    }
+                }
+
                 var a = new List<string>();
                 for (int i = 0; i < RemainingLives; i++) a.Add("❤");
 
                 FormatTask($"""
-                    Protect your Teammates
+                    {message}
                     Remaining Lives: {string.Join("", a)}
                     """, "");
                 yield return Timing.WaitForSeconds(1);
             }
 
-            equipGuardian();
             Manager.ClearPlayerAllowedDoors(player);
         }
 
@@ -152,6 +162,7 @@ namespace CustomGameModes.GameModes
 
         private void equipGuardian()
         {
+            player.Role.Set(_escapedRole, RoleSpawnFlags.None);
             player.AddAmmo(AmmoType.Nato556, 50);
             player.CurrentItem = EnsureFirearm(gun, flashlightAttachment);
             EnsureItem(ItemType.Flashlight);

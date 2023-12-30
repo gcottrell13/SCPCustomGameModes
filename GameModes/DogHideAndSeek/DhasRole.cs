@@ -1,4 +1,4 @@
-using Exiled.API.Enums;
+﻿using Exiled.API.Enums;
 using Exiled.API.Features;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
@@ -454,7 +454,7 @@ namespace CustomGameModes.GameModes
 
         protected Item EnsureFirearm(FirearmType type, params AttachmentIdentifier[] attachments)
         {
-            var item = player.Items.FirstOrDefault(item => (item as Firearm).FirearmType == type);
+            var item = player.Items.FirstOrDefault(item => item is Firearm firearm && firearm.FirearmType == type);
             if (item == null)
             {
                 return player.AddItem(type, attachments);
@@ -538,6 +538,12 @@ namespace CustomGameModes.GameModes
         public string strong(object s)
         {
             return $"<b>{s}</b>";
+        }
+
+        public float WaitHint(string hint, float seconds)
+        {
+            player.ShowHint(hint, seconds);
+            return Timing.WaitForSeconds(seconds);
         }
     }
 }

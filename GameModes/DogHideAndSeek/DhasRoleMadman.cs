@@ -79,9 +79,11 @@ namespace CustomGameModes.GameModes
             {
                 if (searchedForFriendTimes > 10)
                 {
-                    player.ShowHint($"You don't have any friends. =( \nA consolation keycard has been added to your inventory.", 10);
                     var item = EnsureItem(ItemType.KeycardMTFPrivate);
-                    yield return Timing.WaitForSeconds(10);
+                    yield return WaitHint($"""
+                        You don't have any friends. =( 
+                        A consolation keycard has been added to your inventory.
+                        """, 10);
                     goto End;
                 }
 
@@ -110,11 +112,13 @@ namespace CustomGameModes.GameModes
             }
 
             goto End;
-        FriendDead: 
+        FriendDead:
             {
-                player.ShowHint($"{PlayerNameFmt(Friend)} died. \nA consolation keycard has been added to your inventory.", 10);
                 var item = EnsureItem(ItemType.KeycardMTFPrivate);
-                yield return Timing.WaitForSeconds(10);
+                yield return WaitHint($"""
+                    {PlayerNameFmt(Friend)} died. 
+                    A consolation keycard has been added to your inventory.
+                    """, 10);
             }
         End: 
             { }
@@ -154,9 +158,15 @@ namespace CustomGameModes.GameModes
             {
                 var d = (int)((mustRunSeconds - timeElapsed) / timesPerSecond);
                 if (timeElapsed == 0f)
-                    FormatTask($"Stand on CUBE for\n{d} seconds", "");
+                    FormatTask($"""
+                        Stand on CUBE for
+                        {d} seconds
+                        """, "");
                 else
-                    FormatTask($"Stand on CUBE for an additional\n{d} seconds", "");
+                    FormatTask($"""
+                        Stand on CUBE for an additional
+                        {d} seconds
+                        """, "");
             }
 
             float heightThreshold = 13.4f;
@@ -202,24 +212,27 @@ namespace CustomGameModes.GameModes
 
             if (closeEncounterNearCube)
             {
-                player.ShowHint("That was a close one, right?", 7);
-                yield return Timing.WaitForSeconds(7);
+                yield return WaitHint("That was a close one, right?", 7);
 
                 if (!IsNear(Beast, 20))
                 {
-                    player.ShowHint("Well, absence does make the heart grow fonder.", 7);
-                    yield return Timing.WaitForSeconds(7);
+                    yield return WaitHint("Well, absence does make the heart grow fonder.", 7);
                 }
             }
             else
             {
-                player.ShowHint("You know what I was thinking?\nThat Beast looks pretty friendly!", 7);
-                yield return Timing.WaitForSeconds(7);
+                yield return WaitHint($"""
+                    You know what I was thinking?
+                    {PlayerNameFmt(Beast)} looks pretty friendly!
+                    """, 7);
             }
 
             while (!worthIt)
             {
-                FormatTask($"{strong(thingToDieFor)}\n(get killed by the beast)", HotAndColdToBeast());
+                FormatTask($"""
+                    {strong(thingToDieFor)}
+                    (get killed by The Beast)
+                    """, HotAndColdToBeast());
                 yield return Timing.WaitForSeconds(1);
             }
 
@@ -294,8 +307,11 @@ namespace CustomGameModes.GameModes
                 yield return Timing.WaitForSeconds(0.5f);
             }
 
-            Friend.ShowHint($"Tell {myName}:\nI can tell you're going through a hard time right now.\nIt's OK, I'm here for you.", 15f);
-            yield return Timing.WaitForSeconds(15f);
+            yield return FriendRole.WaitHint($"""
+                Tell {myName}:
+                I can tell you're going through a hard time right now.
+                It's OK, I'm here for you.
+                """, 15f);
 
             Manager.CanDropItem(friendPickup.Type, Friend);
 
