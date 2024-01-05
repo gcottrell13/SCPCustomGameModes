@@ -127,11 +127,14 @@ namespace CustomGameModes.GameModes
             }
             // else, the Class-D survived long enough.
 
-            Manager.PlayerDied -= onPlayerRoleDied;
-            Manager.PlayerCompleteAllTasks -= onPlayerCompleteAllTasks;
+            if (Manager != null)
+            {
+                Manager.PlayerDied -= onPlayerRoleDied;
+                Manager.PlayerCompleteAllTasks -= onPlayerCompleteAllTasks;
+                Manager.StopAll();
+            }
 
             CountdownHelper.Stop();
-            Manager.StopAll();
         }
 
         public void OnWaitingForPlayers()
