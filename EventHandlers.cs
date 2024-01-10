@@ -70,6 +70,10 @@ namespace CustomGameModes
                 0.1f,
                 () =>
                 {
+                    foreach (var player in Player.List)
+                    {
+                        player.ClearBroadcasts();
+                    }
                     CurrentGame?.OnRoundStart();
                 }
             );
@@ -80,7 +84,7 @@ namespace CustomGameModes
         {
             if (!IsLobby) return;
 
-            ev.Player.Broadcast(new($"Next game is {CurrentGame?.Name}", 15));
+            ev.Player.Broadcast(new($"Next game is {CurrentGame?.Name}", 500));
         }
 
         private void OnRoundEnded(RoundEndedEventArgs @event)
@@ -108,12 +112,17 @@ namespace CustomGameModes
                 Log.Debug($"Removed {c} invalid entries of '{game}'");
                 goto GetGame;
             }
+            SetNextGame(gameConstructor);
+        }
 
-            CurrentGame = gameConstructor();
+        public static void SetNextGame(Func<IGameMode> constructor)
+        {
+            CurrentGame = constructor();
 
             foreach (var player in Player.List)
             {
-                player.Broadcast(new($"Next game is {game}", 15));
+                player.ClearBroadcasts();
+                player.Broadcast(new($"Next game is {CurrentGame.Name}", 100));
             }
         }
     }

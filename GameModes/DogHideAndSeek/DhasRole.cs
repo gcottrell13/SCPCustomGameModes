@@ -296,9 +296,10 @@ namespace CustomGameModes.GameModes
             return farthestPlayer;
         }
 
-        public Player GetNearestCrewmate()
+        public Player GetNearestCrewmate(Func<Player, bool> filter = null)
         {
             var nearestTeammate = OtherCrewmates
+                    .Where(p => filter?.Invoke(p) ?? true)
                     .OrderBy(p => (p.Position - player.Position).magnitude)
                     .FirstOrDefault();
             if (nearestTeammate == null || nearestTeammate == player) return null;
@@ -501,7 +502,7 @@ namespace CustomGameModes.GameModes
             while (!friendCompletedTask)
             {
                 var compass = "";
-                var nearest = GetNearestCrewmate();
+                var nearest = GetNearestCrewmate(p => !Manager.PlayerRoles[p].DoneAllTasks);
                 if (nearest == null)
                 {
                     compass = "<i>There's nobody nearby</i>";

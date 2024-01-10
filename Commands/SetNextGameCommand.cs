@@ -36,13 +36,7 @@ namespace CustomGameModes.Commands
                 return false;
             }
 
-            EventHandlers.CurrentGame = cons();
-
-            foreach (var player in Player.List)
-            {
-                player.Broadcast(new($"Next game is {EventHandlers.CurrentGame.Name}", 500), shouldClearPrevious: true);
-            }
-
+            EventHandlers.SetNextGame(cons);
             response = $"Set current game: {name}";
             return true;
         }

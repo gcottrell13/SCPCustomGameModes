@@ -40,6 +40,8 @@ namespace CustomGameModes.GameModes
     {
         public string Name => "DogHideAndSeek";
 
+        static int gamesPlayed = 0;
+
         Door beastDoor;
         bool beastReleased;
         bool DidTimeRunOut = false;
@@ -54,9 +56,11 @@ namespace CustomGameModes.GameModes
 
         int CountdownTime = 65;
         int RoundTime = 10 * 60;
-        // int RoundTime = 60;
 
-        int EndOfRoundTime = 30;
+        bool FinalCountdown = false;
+        bool FiveMinuteWarning = false;
+        bool ReleaseOneMinuteWarning = false;
+        bool ReleaseCountdown = false;
 
         public DogHideAndSeek()
         {
@@ -79,6 +83,8 @@ namespace CustomGameModes.GameModes
             //PlayerEvent.DroppingItem += OnDropItem;
             PlayerEvent.PlayerDamageWindow += PlayerDamagingWindow;
 
+            ServerEvent.RoundEnded += OnRoundEnded;
+            ServerEvent.EndingRound += OnEndingRound;
             ServerEvent.RespawningTeam += DeniableEvent;
 
             Scp914Handler.Activating += Activate914;
@@ -92,6 +98,7 @@ namespace CustomGameModes.GameModes
 
             DecontaminationController.Singleton.NetworkDecontaminationOverride = DecontaminationController.DecontaminationStatus.Disabled;
 
+            setupGame();
             roundHandlerCO = Timing.RunCoroutine(_wrapRoundHandle());
         }
 
@@ -109,6 +116,8 @@ namespace CustomGameModes.GameModes
             //PlayerEvent.DroppingItem -= OnDropItem;
             PlayerEvent.PlayerDamageWindow -= PlayerDamagingWindow;
 
+            ServerEvent.RoundEnded -= OnRoundEnded;
+            ServerEvent.EndingRound -= OnEndingRound;
             ServerEvent.RespawningTeam -= DeniableEvent;
 
             Scp914Handler.Activating -= Activate914;
@@ -144,9 +153,25 @@ namespace CustomGameModes.GameModes
 
         #region Event Handlers
 
+        private void OnEndingRound(EndingRoundEventArgs ev)
+        {
+            if (DidTimeRunOut || Manager.Beast().Count == 0)
+            {
+                ev.LeadingTeam = LeadingTeam.FacilityForces;
+                ev.IsAllowed = true;
+            }
+        }
+
+        private void OnRoundEnded(RoundEndedEventArgs ev)
+        {
+            if (DidTimeRunOut)
+            {
+            }
+        }
+
         private void PlayerDamagingWindow(DamagingWindowEventArgs ev)
         {
-            if (ev.Player.Role.Team == Team.SCPs)
+            if (ev.Window.Room.Type == RoomType.LczGlassBox)
             {
                 if (!beastReleased)
                 {
@@ -188,7 +213,13 @@ namespace CustomGameModes.GameModes
         private void OnInteractDoor(InteractingDoorEventArgs ev)
         {
             if (Manager == null) { ev.IsAllowed = false; return; }
-            if (DoorsLockedExceptToRole.Contains(ev.Door))
+
+            if (ev.Door.Room.Type == RoomType.Lcz914 && ev.Door.IsGate == true)
+            {
+                ev.Door.IsOpen = true;
+                DeniableEvent(ev);
+            }
+            else if (DoorsLockedExceptToRole.Contains(ev.Door))
             {
                 if (Manager.DoorsToOpen.TryGetValue(ev.Door, out var assignedPlayers) && assignedPlayers.Contains(ev.Player))
                 {
@@ -297,20 +328,14 @@ namespace CustomGameModes.GameModes
             }
         }
 
-        private IEnumerator<float> _roundHandle()
+        private void setupGame()
         {
+            gamesPlayed++;
             List<Player> players = Player.List.ToList();
-            players.ShuffleList();
-            players.ShuffleList();
-            players.ShuffleList();
-            players.ShuffleList();
-            players.ShuffleList();
 
             Log.Debug("Starting a new game");
 
             Manager = new DhasRoleManager();
-
-            var iterator = 0;
 
             // ----------------------------------------------------------------------------------------------------------------
             // ----------------------------------------------------------------------------------------------------------------
@@ -366,9 +391,11 @@ namespace CustomGameModes.GameModes
 
             var roles = Manager.RoleDistribution;
 
+            var iterator = 0;
             while (iterator < players.Count)
             {
-                var player = players[iterator];
+                var index = (iterator + gamesPlayed) % players.Count;
+                var player = players[index];
                 Manager.ApplyRoleToPlayer(player, roles[iterator]);
                 iterator++;
             }
@@ -377,8 +404,6 @@ namespace CustomGameModes.GameModes
             // ----------------------------------------------------------------------------------------------------------------
             // ----------------------------------------------------------------------------------------------------------------
             #region Lights
-
-            yield return Timing.WaitForSeconds(2);
 
             // turn off all the lights in each room except for those that have players in them
             {
@@ -393,18 +418,20 @@ namespace CustomGameModes.GameModes
             #endregion
             // ----------------------------------------------------------------------------------------------------------------
             // ----------------------------------------------------------------------------------------------------------------
+        }
 
+        private IEnumerator<float> _roundHandle()
+        {
             var timerTotalSeconds = CountdownTime;
             var timerStartedTime = DateTime.Now;
 
             var getBroadcast = (DhasRole p) => p.CountdownBroadcast;
 
-            double elapsedTime() => (DateTime.Now - timerStartedTime).TotalSeconds;
+            int elapsedTime() => (int)(DateTime.Now - timerStartedTime).TotalSeconds;
             void removeTime(int seconds)
             {
-                var elapsed = (int)(DateTime.Now - timerStartedTime).TotalSeconds;
                 timerTotalSeconds -= seconds;
-                var remainingSeconds = timerTotalSeconds - elapsed;
+                var remainingSeconds = Math.Max(0, timerTotalSeconds - elapsedTime());
                 foreach (var playerRole in Manager.ActiveRoles)
                     CountdownHelper.AddCountdown(playerRole.player, getBroadcast(playerRole), TimeSpan.FromSeconds(remainingSeconds));
             }
@@ -414,7 +441,22 @@ namespace CustomGameModes.GameModes
             Manager.RemovingTime += removeTime;
             Manager.PlayerDied += onPlayerRoleDied;
             Manager.PlayerCompleteAllTasks += onPlayerCompleteAllTasks;
-            while (elapsedTime() < timerTotalSeconds) yield return Timing.WaitForSeconds(1);
+            while (elapsedTime() < timerTotalSeconds)
+            {
+                var t = timerTotalSeconds - elapsedTime();
+                if (!ReleaseOneMinuteWarning && t <= 60)
+                {
+                    ReleaseOneMinuteWarning = true;
+                    CassieCountdownHelper.SayTimeReminder(t, "until s c p 9 3 9 escapes");
+                }
+                if (!ReleaseCountdown && t <= 10)
+                {
+                    ReleaseCountdown = true;
+                    CassieCountdownHelper.SayCountdown(t, t);
+                    removeTime(0);
+                }
+                yield return Timing.WaitForSeconds(1);
+            }
 
             // ----------------------------------------------------------------------------------------------------------------
             // ----------------------------------------------------------------------------------------------------------------
@@ -444,8 +486,27 @@ namespace CustomGameModes.GameModes
 
             while (elapsedTime() < timerTotalSeconds)
             {
-                if (Manager.BeastSickoModeActivate == false && timerTotalSeconds - elapsedTime() < 70)
+                var t = timerTotalSeconds - elapsedTime();
+
+                if (!FiveMinuteWarning && t <= 300 && t % 30 == 0)
+                {
+                    FiveMinuteWarning = true;
+                    CassieCountdownHelper.SayTimeReminder(t, "left in the game");
+                }
+
+                if (Manager.BeastSickoModeActivate == false && t <= 70)
+                {
+                    CassieCountdownHelper.SayTimeReminder(60, "left in the game");
                     ActivateBeastSickoMode();
+                }
+
+                if (!FinalCountdown && t <= 10)
+                {
+                    FinalCountdown = true;
+                    CassieCountdownHelper.SayCountdown(t, t);
+                    removeTime(0);
+                }
+
                 yield return Timing.WaitForSeconds(1);
             }
 
@@ -463,58 +524,39 @@ namespace CustomGameModes.GameModes
                 room.Color = Color.white;
             }
 
-            Cassie.MessageTranslated("The Class D Are Successful", "Class-D Win!");
+            var stillAlive = Manager.Humans().Count;
+            if (Player.Get(player => player.Role.Side == Side.Mtf).Count() > 0)
+                Round.EscapedScientists = stillAlive;
+            else
+                Round.EscapedDClasses = stillAlive * 2; // *2 so that it doesn't end in a draw
+
             DidTimeRunOut = true;
 
-            foreach (var classD in Player.List.Where(x => x.IsHuman))
+            foreach (var classD in Manager.Humans())
             {
-                var item = classD.AddItem(ItemType.MicroHID);
-                classD.CurrentItem = item;
-            }
-
-            foreach (var player in Manager.ActiveRoles)
-            {
-                CountdownHelper.AddCountdown(player.player, player.RoundEndBroadcast, TimeSpan.FromSeconds(EndOfRoundTime));
-                player.player.ShowHint($"""
-                    <size=60><b>{player.RoundEndBroadcast}</b></size>
-
-
-
-
-                    """, EndOfRoundTime);
+                var item = classD.player.AddItem(ItemType.MicroHID);
+                classD.player.CurrentItem = item;
             }
 
             Manager.StopAll();
-
-            yield return Timing.WaitForSeconds(EndOfRoundTime);
-
-            //foreach (var beast in Manager.Beast())
-            //{
-            //    if (beast.player.IsAlive)
-            //        beast.player.Hurt(-1);
-            //}
-
-            // ----------------------------------------------------------------------------------------------------------------
-            // ----------------------------------------------------------------------------------------------------------------
-
-            Round.Restart(false);
-
-            while (true)
-            {
-                Log.Debug("Round STILL going");
-                yield return Timing.WaitForSeconds(2);
-            }
         }
 
         #endregion
 
         private void onPlayerRoleDied(Player ev)
         {
-            Cassie.Clear();
-            Cassie.DelayedMessage($"1 personnel is dead", 3f, isNoisy: false);
+            if (Manager.PlayerRoles[ev] is BeastRole) { return; }
 
             var specRole = Manager.ApplyRoleToPlayer(ev, SpectatorRole.name);
             specRole.Start();
+
+            Timing.CallDelayed(UnityEngine.Random.Range(0, 2), () =>
+            {
+                Cassie.Clear();
+                var spectators = Manager.Spectators().Count;
+                var verb = spectators == 1 ? "is" : "are";
+                Cassie.DelayedMessage($"{spectators} personnel {verb} dead", 1f, isNoisy: false);
+            });
         }
 
         private void onPlayerCompleteAllTasks(Player ev)

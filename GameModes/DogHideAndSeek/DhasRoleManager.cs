@@ -128,6 +128,8 @@ namespace CustomGameModes.GameModes
             }
         }
 
+        public List<DhasRole> Spectators() => ActiveRoles.Where(x => x.player.IsDead).ToList();
+
         public List<DhasRole> Humans() => ActiveRoles.Where(role => role.player.IsHuman).ToList();
 
         public List<DhasRole> Beast() => ActiveRoles.Where(role => role.player.IsScp).ToList();

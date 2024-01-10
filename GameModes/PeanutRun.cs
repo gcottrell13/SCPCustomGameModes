@@ -26,6 +26,7 @@ namespace CustomGameModes.GameModes
 
         CoroutineHandle roundLoop;
 
+        const RoleTypeId STARTROLE = RoleTypeId.ClassD;
         const RoleTypeId SCPROLE = RoleTypeId.Scp0492;
         static Vector3 SCPSpawnPoint = RoleTypeId.Scp049.GetRandomSpawnLocation().Position;
 
@@ -39,7 +40,7 @@ namespace CustomGameModes.GameModes
             PlayerEvent.TriggeringTesla += DeniableEvent;
             PlayerEvent.Escaping += OnEscape;
             PlayerEvent.Dying += OnDied;
-            PlayerEvent.SearchingPickup += DeniableEvent;
+            PlayerEvent.SearchingPickup += OnSearchingPickup;
             ServerEvent.RespawningTeam += DeniableEvent;
 
             roundLoop = Timing.RunCoroutine(_roundLoop());
@@ -49,7 +50,7 @@ namespace CustomGameModes.GameModes
             PlayerEvent.TriggeringTesla -= DeniableEvent;
             PlayerEvent.Escaping -= OnEscape;
             PlayerEvent.Dying -= OnDied;
-            PlayerEvent.SearchingPickup -= DeniableEvent;
+            PlayerEvent.SearchingPickup -= OnSearchingPickup;
             ServerEvent.RespawningTeam -= DeniableEvent;
 
             if (roundLoop.IsRunning)
@@ -128,7 +129,7 @@ namespace CustomGameModes.GameModes
                     if (chaosPlayers.Count > 0)
                     {
                         var scpCount = Player.Get(p => p.IsScp).Count();
-                        var cdCount = Player.Get(p => p.Role.Type == RoleTypeId.ClassD).Count();
+                        var cdCount = Player.Get(p => p.Role == STARTROLE).Count();
                         var scpMsg = $"<color=red>SCPs</color>: {scpCount}";
                         var cdMsg = $"<color=orange>Class-D</color>: {cdCount}";
                         foreach (var ci in chaosPlayers)
@@ -165,7 +166,7 @@ namespace CustomGameModes.GameModes
 
         public void SetupClassD(Player player)
         {
-            player.Role.Set(RoleTypeId.ClassD, RoleSpawnFlags.UseSpawnpoint);
+            player.Role.Set(STARTROLE, RoleSpawnFlags.UseSpawnpoint);
             player.ClearInventory();
             player.CurrentItem = player.AddItem(ItemType.KeycardO5);
             player.AddItem(ItemType.Lantern);
@@ -227,6 +228,11 @@ namespace CustomGameModes.GameModes
             ev.IsAllowed = false;
         }
 
+        public void OnSearchingPickup(SearchingPickupEventArgs ev)
+        {
+            if (ev.Player.Role == STARTROLE) DeniableEvent(ev);
+        }
+
         public void OnDied(DyingEventArgs ev)
         {
             if (ev.Player.IsHuman)
@@ -249,6 +255,19 @@ namespace CustomGameModes.GameModes
                 PrepareSCPAfterEscape(scp);
                 ShowEscapedMessage(scp);
             }
+            Timing.CallDelayed(15, () =>
+            {
+                e.Player.ShowHint("""
+                    Go Kill all the Zombies!
+                    Beware, you can still become a Zombie!
+
+
+
+
+
+
+                    """, 15);
+            });
         }
     }
 }

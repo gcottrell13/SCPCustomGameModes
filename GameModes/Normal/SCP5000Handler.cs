@@ -86,7 +86,10 @@ namespace CustomGameModes.GameModes.Normal
 
         void UpgradingPlayer(UpgradingPlayerEventArgs ev)
         {
-            if (!HasGivenScp5000 && ev.KnobSetting == Scp914.Scp914KnobSetting.VeryFine && UnityEngine.Random.Range(1, 100) <= Scp5000Chance)
+            if (!HasGivenScp5000 && (
+                ev.KnobSetting == Scp914.Scp914KnobSetting.VeryFine
+                || ev.KnobSetting == Scp914.Scp914KnobSetting.Fine
+                ) && UnityEngine.Random.Range(1, 100) <= Scp5000Chance)
             {
                 HasGivenScp5000 = true;
                 SetupScp5000(ev.Player);

@@ -24,11 +24,13 @@ namespace CustomGameModes.GameModes
 
         SCP5000Handler SCP5000Handler { get; set; }
         ClassDStarterInventory ClassDStarterInventory { get; set; }
+        CellGuard CellGuard { get; set; }
 
         public NormalSCPSL()
         {
             SCP5000Handler = new SCP5000Handler();
             ClassDStarterInventory = new ClassDStarterInventory();
+            CellGuard = new CellGuard();
         }
 
 
@@ -56,11 +58,13 @@ namespace CustomGameModes.GameModes
         {
             SCP5000Handler.SubscribeEventHandlers();
             ClassDStarterInventory.SubscribeEventHandlers();
+            CellGuard.SubscribeEventHandlers();
         }
         void UnsubscribeEventHandlers()
         {
             SCP5000Handler.UnsubscribeEventHandlers();
             ClassDStarterInventory.UnsubscribeEventHandlers();
+            CellGuard.UnsubscribeEventHandlers();
         }
     }
 }
