@@ -18,6 +18,17 @@ namespace CustomGameModes.GameModes.Normal
 {
     internal class SCP5000Handler
     {
+        public static List<SCP5000Handler> Instances { get; } = new();
+
+        public static void UnsubscribeAll()
+        {
+            foreach (var instance in Instances)
+            {
+                instance.UnsubscribeEventHandlers();
+            }
+            Instances.Clear();
+        }
+
         bool HasGivenScp5000 = false;
         Player Scp5000Owner = null;
         RoleTypeId Scp5000OwnerRole;
@@ -41,7 +52,7 @@ namespace CustomGameModes.GameModes.Normal
             PlayerEvent.VoiceChatting += OnVoiceChat;
             PlayerEvent.Shooting += OnShoot;
             PlayerEvent.MakingNoise += OnMakingNoise;
-            PlayerEvent.ReceivingEffect += ReceivingEffect;
+            //PlayerEvent.ReceivingEffect += ReceivingEffect;
 
             Scp914Event.UpgradingPlayer += UpgradingPlayer;
         }
@@ -51,7 +62,7 @@ namespace CustomGameModes.GameModes.Normal
             PlayerEvent.VoiceChatting -= OnVoiceChat;
             PlayerEvent.Shooting -= OnShoot;
             PlayerEvent.MakingNoise -= OnMakingNoise;
-            PlayerEvent.ReceivingEffect -= ReceivingEffect;
+            //PlayerEvent.ReceivingEffect -= ReceivingEffect;
 
             Scp914Event.UpgradingPlayer -= UpgradingPlayer;
 
@@ -72,7 +83,7 @@ namespace CustomGameModes.GameModes.Normal
             if (PlayerIsHidden(ev.Player))
             {
                 LastNoisyAction = DateTime.Now;
-                ev.Player.DisableEffect(Exiled.API.Enums.EffectType.Invisible);
+                //ev.Player.DisableEffect(Exiled.API.Enums.EffectType.Invisible);
             }
         }
 
@@ -80,7 +91,8 @@ namespace CustomGameModes.GameModes.Normal
         {
             if (PlayerIsHidden(ev.Player))
             {
-                ev.IsAllowed = false;
+                LastNoisyAction = DateTime.Now;
+                //ev.IsAllowed = false;
             }
         }
 
@@ -91,30 +103,31 @@ namespace CustomGameModes.GameModes.Normal
                 || ev.KnobSetting == Scp914.Scp914KnobSetting.Fine
                 ) && UnityEngine.Random.Range(1, 100) <= Scp5000Chance)
             {
-                HasGivenScp5000 = true;
                 SetupScp5000(ev.Player);
                 ev.Player.Position = ev.OutputPosition;
                 ev.IsAllowed = false;
             }
         }
 
-        void ReceivingEffect(ReceivingEffectEventArgs ev)
-        {
-            if (PlayerIsHidden(ev.Player) && !WasRecentlyNoisy && ev.Effect.GetEffectType() == Exiled.API.Enums.EffectType.Invisible && ev.Intensity == 0)
-            {
-                ev.IsAllowed = false;
-            }
-        }
+        //void ReceivingEffect(ReceivingEffectEventArgs ev)
+        //{
+        //    if (PlayerIsHidden(ev.Player) && !WasRecentlyNoisy && ev.Effect.GetEffectType() == Exiled.API.Enums.EffectType.Invisible && ev.Intensity == 0)
+        //    {
+        //        LastNoisyAction = DateTime.Now;
+        //    }
+        //}
 
         // ----------------------------------------------------------------------------------------------------
         // ----------------------------------------------------------------------------------------------------
 
         bool PlayerIsHidden(Player player) => player == Scp5000Owner && player.TryGetEffect(Exiled.API.Enums.EffectType.Invisible, out var effect) && effect.Intensity > 0;
 
-        void SetupScp5000(Player player)
+        public void SetupScp5000(Player player)
         {
-            if (Scp5000Owner != null) throw new Exception("Someone already has SCP 5000");
+            if (Scp5000Owner != null || HasGivenScp5000) throw new Exception("Someone already has SCP 5000");
 
+            HasGivenScp5000 = true;
+            Instances.Add(this);
             Scp5000Owner = player;
             player.EnableEffect(Exiled.API.Enums.EffectType.Invisible, 999f);
             Scp5000OwnerRole = player.Role;
@@ -145,6 +158,9 @@ namespace CustomGameModes.GameModes.Normal
 
                 yield return Timing.WaitForSeconds(1);
             }
+
+            UnsubscribeEventHandlers();
+            Instances.Remove(this);
         }
     }
 }

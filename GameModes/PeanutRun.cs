@@ -17,6 +17,7 @@ using PlayerRoles;
 using Exiled.API.Enums;
 using Exiled.API.Features.Roles;
 using Exiled.API.Extensions;
+using CustomGameModes.API;
 
 namespace CustomGameModes.GameModes
 {
@@ -67,8 +68,7 @@ namespace CustomGameModes.GameModes
 
         private IEnumerator<float> _roundLoop()
         {
-            var players = Player.List.ToList();
-            players.ShuffleList();
+            var players = Player.List.ToList().ManyRandom();
 
             for (var i = 0; i < players.Count; i++)
             {

@@ -327,6 +327,24 @@ namespace CustomGameModes.GameModes
 
         #region Compass
 
+        public string CompassToRoom(RoomType roomType)
+        {
+            if (Room.Get(roomType) is Room room)
+            {
+                return CompassToRoom(room);
+            }
+            return "";
+        }
+
+        public string CompassToRoom(Room room)
+        {
+            if (player.CurrentRoom != room && room.Doors.FirstOrDefault(door => door.Rooms.Count > 1) is Door entranceDoor)
+            {
+                return GetCompass(entranceDoor.Position);
+            }
+            return "";
+        }
+
         public string GetCompass(Vector3 to)
         {
             var delta = player.Transform.InverseTransformPoint(to);
@@ -468,18 +486,14 @@ namespace CustomGameModes.GameModes
         #region Tasks
 
         protected ItemType MyKeycardType;
-        [CrewmateTask(TaskDifficulty.Hard)]
+        [CrewmateTask(TaskDifficulty.Medium)]
         protected IEnumerator<float> UpgradeKeycard()
         {
             CanUse914();
 
             while (NotHasItem(ItemType.KeycardO5, out var item))
             {
-                var compass = player.CurrentRoom?.Type != RoomType.Lcz914 ?
-                    GetCompass(Door.Get(DoorType.Scp914Gate).Position) :
-                    "";
-
-                FormatTask("Max Upgrade Your Keycard to <b>O5</b>", compass);
+                FormatTask("Max Upgrade Your Keycard to <b>O5</b>", CompassToRoom(RoomType.Lcz914));
                 yield return Timing.WaitForSeconds(1);
             }
 

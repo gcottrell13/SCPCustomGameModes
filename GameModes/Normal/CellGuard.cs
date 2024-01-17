@@ -1,11 +1,4 @@
-﻿using Exiled.Events.EventArgs.Interfaces;
-using Exiled.Events.EventArgs.Player;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using PlayerEvent = Exiled.Events.Handlers.Player;
+﻿using System.Linq;
 using Exiled.API.Features;
 using PlayerRoles;
 using MEC;
@@ -30,11 +23,11 @@ namespace CustomGameModes.GameModes.Normal
             Timing.CallDelayed(0.5f, () =>
             {
                 var guards = Player.Get(RoleTypeId.FacilityGuard).ToList();
-                var numCellGuards = guards.Count switch
+                var numCellGuards = Player.Get(RoleTypeId.ClassD).Count() switch
                 {
-                    0 => 0,
-                    <= 3 => 1,
-                    >= 4 => 2,
+                    <= 5 => 0,
+                    <= 10 => 1,
+                    _ => 2,
                 };
                 for (var i = 0; i < numCellGuards; i++)
                 {

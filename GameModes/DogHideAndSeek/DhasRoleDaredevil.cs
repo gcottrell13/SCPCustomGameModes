@@ -112,7 +112,7 @@ namespace CustomGameModes.GameModes
             }
         }
 
-        [CrewmateTask(TaskDifficulty.Hard)]
+        [CrewmateTask(TaskDifficulty.Medium)]
         private IEnumerator<float> NoFlashlight()
         {
             var mustRunSeconds = 30f;
@@ -160,7 +160,7 @@ namespace CustomGameModes.GameModes
             PlayerEvent.ThrownProjectile -= ghostlightUse;
         }
 
-        [CrewmateTask(TaskDifficulty.Hard)]
+        [CrewmateTask(TaskDifficulty.Medium)]
         private IEnumerator<float> BeNearBeast()
         {
             var mustRunSeconds = 3f;

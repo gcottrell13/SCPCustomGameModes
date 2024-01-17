@@ -16,6 +16,7 @@ using ServerEvent = Exiled.Events.Handlers.Server;
 using PlayerEvent = Exiled.Events.Handlers.Player;
 using Exiled.Events.EventArgs.Player;
 using Exiled.API.Features.Doors;
+using CustomGameModes.GameModes.Normal;
 
 namespace CustomGameModes
 {
@@ -31,9 +32,9 @@ namespace CustomGameModes
 
         public static Dictionary<string, Func<IGameMode>> GameList = new()
         {
-            { nameof(DogHideAndSeek), () => new DogHideAndSeek() },
-            { nameof(PeanutRun), () => new PeanutRun() },
-            { "Normal", () => new NormalSCPSL() },
+            { "dhas", () => new DogHideAndSeek() },
+            { "z", () => new PeanutRun() },
+            { "n", () => new NormalSCPSL() },
         };
 
         internal void RegisterEvents()
@@ -89,6 +90,7 @@ namespace CustomGameModes
 
         private void OnRoundEnded(RoundEndedEventArgs @event)
         {
+            SCP5000Handler.UnsubscribeAll();
             CurrentGame?.OnRoundEnd();
         }
 

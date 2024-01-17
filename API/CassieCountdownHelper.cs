@@ -15,18 +15,18 @@ namespace CustomGameModes.API
             var sTen = (secondsRemaining % 60) / 10;
             var m = secondsRemaining / 60;
 
+            if (secondsRemaining < 100 && m > 0)
+            {
+                sTen += 6;
+                m = 0;
+            }
+
             var minutes = m > 0 ? $"{m} minutes" : "";
             var secondsTens = sTen > 0 ? $"{sTen}0" : "";
             var secondsOnes = sOne > 0 ? $"{sOne}" : "";
-            var seconds = sTen > 2 ? "seconds" : "";
+            var seconds = sTen > 0 || sOne > 0 ? "seconds" : "";
 
             var message = $"{minutes} {secondsTens} {secondsOnes} {seconds} {after}";
-
-            if (secondsRemaining == 60)
-            {
-                message = $"60 seconds {after}";
-            }
-
 
             Log.Info($"CASSIE COUNTDOWN - {message}");
             Cassie.Clear();

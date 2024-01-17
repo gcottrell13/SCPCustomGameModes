@@ -5,6 +5,7 @@ using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
 using Exiled.Events.EventArgs.Player;
+using Interactables.Interobjects;
 using MEC;
 using PlayerRoles;
 using System;
@@ -24,7 +25,7 @@ namespace CustomGameModes.GameModes
         public override List<dhasTask> Tasks => new()
         {
             GetAKeycard,
-            UpgradeKeycard,
+            GetCandy,
             BeNearWhenTaskComplete,
             ShootSomeone,
         };
@@ -59,6 +60,16 @@ namespace CustomGameModes.GameModes
                 yield return Timing.WaitForSeconds(0.5f);
             }
             MyKeycardType = myCard.Type;
+        }
+
+        [CrewmateTask(TaskDifficulty.Medium)]
+        private IEnumerator<float> GetCandy()
+        {
+            while (player.Items.FirstOrDefault(x => x is Scp330) is not Scp330 scp330 || scp330.Candies.Count < 2)
+            {
+                FormatTask("Acquire 2 Candies", CompassToRoom(RoomType.Lcz330));
+                yield return Timing.WaitForSeconds(1f);
+            }
         }
 
         bool hurtBeast = false;

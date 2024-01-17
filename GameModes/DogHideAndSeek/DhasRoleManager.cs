@@ -50,8 +50,7 @@ namespace CustomGameModes.GameModes
 
         public DhasRoleManager()
         {
-            var A = new[] { DhasRoleClassD.name, DhasRoleScientist.name };
-            A.ShuffleList();
+            var A = new[] { DhasRoleClassD.name, DhasRoleScientist.name }.ManyRandom();
 
             RoleDistribution = new[]
             {
