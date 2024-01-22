@@ -74,6 +74,7 @@ namespace CustomGameModes
                     foreach (var player in Player.List)
                     {
                         player.ClearBroadcasts();
+                        player.Scale = Vector3.one; // just in case you were having some fun in the lobby
                     }
                     CurrentGame?.OnRoundStart();
                 }
@@ -85,13 +86,17 @@ namespace CustomGameModes
         {
             if (!IsLobby) return;
 
-            ev.Player.Broadcast(new($"Next game is {CurrentGame?.Name}", 500));
+            ev.Player.Broadcast(new($"Next game is {CurrentGame?.Name}", 100), true);
         }
 
         private void OnRoundEnded(RoundEndedEventArgs @event)
         {
             SCP5000Handler.UnsubscribeAll();
             CurrentGame?.OnRoundEnd();
+            foreach (var player in Player.List)
+            {
+                player.Scale = Vector3.one; // just in case you were having some fun in the game
+            }
         }
 
         public void GetNextRandomGame()
@@ -123,8 +128,7 @@ namespace CustomGameModes
 
             foreach (var player in Player.List)
             {
-                player.ClearBroadcasts();
-                player.Broadcast(new($"Next game is {CurrentGame.Name}", 100));
+                player.Broadcast(new($"Next game is {CurrentGame.Name}", 100), true);
             }
         }
     }

@@ -26,7 +26,7 @@ namespace CustomGameModes.GameModes
         public Player player { get; private set; }
         public DhasRoleManager Manager { get; }
         public abstract List<dhasTask> Tasks { get; }
-        public abstract RoleTypeId RoleType();
+        public abstract RoleTypeId RoleType { get; }
 
         #region Running State
 
@@ -76,7 +76,7 @@ namespace CustomGameModes.GameModes
         {
             var item = player.AddItem(ItemType.Flashlight);
             player.CurrentItem = item;
-            EnsureFirearm(FirearmType.Com15);
+            EnsureFirearm(FirearmType.Com15, AttachmentIdentifier.Get(FirearmType.Com15, InventorySystem.Items.Firearms.Attachments.AttachmentName.Flashlight));
             player.AddAmmo(FirearmType.Com15, 10);
         }
 
@@ -129,7 +129,7 @@ namespace CustomGameModes.GameModes
                     {
                         Log.Error(e);
                     }
-                    if (player.Role.Type == RoleTypeId.Spectator && RoleType() != RoleTypeId.Spectator)
+                    if (player.Role.Type == RoleTypeId.Spectator && RoleType != RoleTypeId.Spectator)
                     {
                         // dead =(
                         Manager.OnPlayerDied(player);
@@ -345,6 +345,30 @@ namespace CustomGameModes.GameModes
             return "";
         }
 
+        public string CompassToPlayer(Player p)
+        {
+            if (p == null)
+                return "";
+            if (p.Zone != player.Zone)
+            {
+                string compass = p.CurrentRoom?.Type switch
+                { 
+                    RoomType.HczElevatorA => CompassToRoom(Room.Get(RoomType.LczCheckpointA)),
+                    RoomType.HczElevatorB => CompassToRoom(Room.Get(RoomType.LczCheckpointB)),
+                    _ => "",
+                };
+
+                return $"""
+                    This player is in {p.Zone} at {p.CurrentRoom.Type}:
+                    {compass}
+                    """;
+            }
+            else
+            {
+                return GetCompass(p.Position);
+            }
+        }
+
         public string GetCompass(Vector3 to)
         {
             var delta = player.Transform.InverseTransformPoint(to);
@@ -515,12 +539,8 @@ namespace CustomGameModes.GameModes
             friendCompletedTask = false;
             while (!friendCompletedTask)
             {
-                var compass = "";
-                var nearest = GetNearestCrewmate(p => !Manager.PlayerRoles[p].DoneAllTasks);
-                if (nearest == null)
-                {
-                    compass = "<i>There's nobody nearby</i>";
-                }
+                var nearest = GetNearestCrewmate(p => !Manager.PlayerRoles[p].DoneAllTasks && Manager.PlayerRoles[p].CurrentTask != BeNearWhenTaskComplete);
+                var compass = nearest == null ? "<i>There's nobody nearby</i>" : CompassToPlayer(nearest);
 
                 IsNear(nearest, requiredFriendDistance, out var dist);
 
@@ -545,15 +565,13 @@ namespace CustomGameModes.GameModes
                 RoleTypeId.Scientist => "yellow",
                 RoleTypeId.ClassD => "orange",
                 RoleTypeId.NtfCaptain => "blue",
+                RoleTypeId.Spectator => "white",
                 _ => "red",
             };
             return strong($"<color={color}>{player.DisplayNickname}</color>");
         }
 
-        public string strong(object s)
-        {
-            return $"<b>{s}</b>";
-        }
+        public string strong(object s) => $"<b>{s}</b>";
 
         public float WaitHint(string hint, float seconds)
         {

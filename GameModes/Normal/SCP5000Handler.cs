@@ -49,51 +49,17 @@ namespace CustomGameModes.GameModes.Normal
 
         public void SubscribeEventHandlers()
         {
-            PlayerEvent.VoiceChatting += OnVoiceChat;
-            PlayerEvent.Shooting += OnShoot;
-            PlayerEvent.MakingNoise += OnMakingNoise;
-            //PlayerEvent.ReceivingEffect += ReceivingEffect;
-
+            PlayerEvent.ReceivingEffect += ReceivingEffect;
             Scp914Event.UpgradingPlayer += UpgradingPlayer;
         }
 
         public void UnsubscribeEventHandlers()
         {
-            PlayerEvent.VoiceChatting -= OnVoiceChat;
-            PlayerEvent.Shooting -= OnShoot;
-            PlayerEvent.MakingNoise -= OnMakingNoise;
-            //PlayerEvent.ReceivingEffect -= ReceivingEffect;
-
+            PlayerEvent.ReceivingEffect -= ReceivingEffect;
             Scp914Event.UpgradingPlayer -= UpgradingPlayer;
 
             if (scp5000Coroutine.IsRunning)
                 Timing.KillCoroutines(scp5000Coroutine);
-        }
-
-        void OnVoiceChat(VoiceChattingEventArgs ev)
-        {
-            if (PlayerIsHidden(ev.Player))
-            {
-                ev.IsAllowed = false;
-            }
-        }
-
-        void OnShoot(ShootingEventArgs ev)
-        {
-            if (PlayerIsHidden(ev.Player))
-            {
-                LastNoisyAction = DateTime.Now;
-                //ev.Player.DisableEffect(Exiled.API.Enums.EffectType.Invisible);
-            }
-        }
-
-        void OnMakingNoise(MakingNoiseEventArgs ev)
-        {
-            if (PlayerIsHidden(ev.Player))
-            {
-                LastNoisyAction = DateTime.Now;
-                //ev.IsAllowed = false;
-            }
         }
 
         void UpgradingPlayer(UpgradingPlayerEventArgs ev)
@@ -109,18 +75,16 @@ namespace CustomGameModes.GameModes.Normal
             }
         }
 
-        //void ReceivingEffect(ReceivingEffectEventArgs ev)
-        //{
-        //    if (PlayerIsHidden(ev.Player) && !WasRecentlyNoisy && ev.Effect.GetEffectType() == Exiled.API.Enums.EffectType.Invisible && ev.Intensity == 0)
-        //    {
-        //        LastNoisyAction = DateTime.Now;
-        //    }
-        //}
+        void ReceivingEffect(ReceivingEffectEventArgs ev)
+        {
+            if (ev.Effect.GetEffectType() == Exiled.API.Enums.EffectType.Invisible && ev.Intensity == 0)
+            {
+                LastNoisyAction = DateTime.Now;
+            }
+        }
 
         // ----------------------------------------------------------------------------------------------------
         // ----------------------------------------------------------------------------------------------------
-
-        bool PlayerIsHidden(Player player) => player == Scp5000Owner && player.TryGetEffect(Exiled.API.Enums.EffectType.Invisible, out var effect) && effect.Intensity > 0;
 
         public void SetupScp5000(Player player)
         {

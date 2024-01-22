@@ -6,23 +6,23 @@ using System.Threading.Tasks;
 
 namespace CustomGameModes.API
 {
-    internal class RandomWeight<T> : Dictionary<int, T>
+    internal static class RandomWeight
     {
-        public IEnumerable<(int key, T item)> Pairs()
+        public static IEnumerable<(T key, float chance)> Pairs<T>(this Dictionary<T, float> dict)
         {
-            foreach (var kvp in this) yield return (kvp.Key, kvp.Value);
+            foreach (var kvp in dict) yield return (kvp.Key, kvp.Value);
         }
 
-        public T GetRandom()
+        public static T GetRandom<T>(this Dictionary<T, float> dict)
         {
-            var total = Keys.Sum();
+            var total = dict.Values.Sum();
             var chosenValue = UnityEngine.Random.Range(1, total);
-            foreach (var (key, value) in this.Pairs())
+            foreach (var (key, value) in dict.Pairs())
             {
-                total -= key;
+                total -= value;
                 if (chosenValue > total) // not GTE since we are subtracting from total before this check.
                 {
-                    return value;
+                    return key;
                 }
             }
             return default;

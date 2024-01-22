@@ -23,7 +23,7 @@ namespace CustomGameModes.GameModes
     {
         public const string name = "scientist";
 
-        public override RoleTypeId RoleType() => RoleTypeId.Scientist;
+        public override RoleTypeId RoleType => RoleTypeId.Scientist;
 
         public ItemType SCP1;
 
@@ -37,7 +37,7 @@ namespace CustomGameModes.GameModes
 
         public DhasRoleScientist(Player player, DhasRoleManager manager) : base(player, manager)
         {
-            player.Role.Set(RoleType(), RoleSpawnFlags.UseSpawnpoint);
+            player.Role.Set(RoleType, RoleSpawnFlags.UseSpawnpoint);
         }
 
         /// <summary>

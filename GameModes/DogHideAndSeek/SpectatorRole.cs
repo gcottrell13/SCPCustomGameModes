@@ -15,7 +15,7 @@ namespace CustomGameModes.GameModes
 
         public SpectatorRole(Player player, DhasRoleManager manager) : base(player, manager)
         {
-            player.Role.Set(RoleType(), RoleSpawnFlags.UseSpawnpoint);
+            player.Role.Set(RoleType, RoleSpawnFlags.UseSpawnpoint);
         }
 
         public override List<dhasTask> Tasks => new()
@@ -39,7 +39,7 @@ namespace CustomGameModes.GameModes
 
         public override void ShowTaskCompleteMessage(float duration) { }
 
-        public override RoleTypeId RoleType() => RoleTypeId.Spectator;
+        public override RoleTypeId RoleType => RoleTypeId.Spectator;
 
         [CrewmateTask(TaskDifficulty.None)]
         public IEnumerator<float> Spectate()

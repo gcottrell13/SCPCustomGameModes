@@ -16,16 +16,18 @@ namespace CustomGameModes.Configs
         [Description("game modes")]
         public List<string> GameModes { get; set; } = new()
         {
-            "DogHideAndSeek",
-            "Normal",
-            "Normal",
-            "Normal",
-            "Normal",
-            "Normal",
+            "dhas",
+            "z",
+            "n",
+            "n",
         };
 
         [Description("In Normal, % chance of upgrading player with SCP 5000")]
         public int Scp5000Chance { get; set; } = 5;
 
+        public Dictionary<string, float> DhasScpChance { get; set; } = new()
+        {
+            { "Scp939", 100f },
+        };
     }
 }

@@ -2,37 +2,24 @@
 using Exiled.API.Enums;
 using Exiled.API.Extensions;
 using Exiled.API.Features;
-using Exiled.API.Features.DamageHandlers;
 using Exiled.API.Features.Doors;
-using Exiled.API.Features.Spawn;
 using Exiled.Events.EventArgs.Player;
 using Exiled.Events.EventArgs.Server;
 using MEC;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using PlayerEvent = Exiled.Events.Handlers.Player;
-using MapEvent = Exiled.Events.Handlers.Map;
 using Scp914Handler = Exiled.Events.Handlers.Scp914;
 using ServerEvent = Exiled.Events.Handlers.Server;
-using PluginAPI.Events;
-using Exiled.Events.EventArgs.Map;
 using LightContainmentZoneDecontamination;
-using PluginAPI.Roles;
 using Exiled.Events.EventArgs.Interfaces;
 using Exiled.Events.EventArgs.Scp914;
 using Exiled.API.Features.Pickups;
 using Scp914;
 using PlayerRoles;
-using Scp914.Processors;
-using CommandSystem.Commands.RemoteAdmin;
-using CommandSystem.Commands.RemoteAdmin.MutingAndIntercom;
-using PlayerRoles.Voice;
-using System.Reflection;
-using InventorySystem;
+using Exiled.API.Features.Items;
 
 namespace CustomGameModes.GameModes
 {
@@ -43,7 +30,6 @@ namespace CustomGameModes.GameModes
         static int gamesPlayed = 0;
 
         Door beastDoor;
-        bool beastReleased;
         bool DidTimeRunOut = false;
         List<Door> LCZDoors = new();
         public static DhasRoleManager Manager;
@@ -79,7 +65,7 @@ namespace CustomGameModes.GameModes
             PlayerEvent.Hurting += OnHurting;
             PlayerEvent.SearchingPickup += OnSearchingPickup;
             PlayerEvent.DroppingAmmo += DeniableEvent;
-            //PlayerEvent.DroppingItem += OnDropItem;
+            PlayerEvent.InteractingElevator += DeniableEvent;
             PlayerEvent.PlayerDamageWindow += PlayerDamagingWindow;
 
             ServerEvent.EndingRound += OnEndingRound;
@@ -87,10 +73,7 @@ namespace CustomGameModes.GameModes
 
             Scp914Handler.Activating += Activate914;
             Scp914Handler.UpgradingPickup += UpgradePickup;
-            //Scp914Handler.ChangingKnobSetting += DeniableEvent;
-            //Scp914Handler.UpgradingPickup += DeniableEvent;
-            Scp914Handler.UpgradingInventoryItem += DeniableEvent;
-            //Scp914Handler.UpgradingPlayer += DeniableEvent;
+            Scp914Handler.UpgradingInventoryItem += UpgradeInventory;
             // -------------------------------------------------------------
             // -------------------------------------------------------------
 
@@ -118,7 +101,7 @@ namespace CustomGameModes.GameModes
             PlayerEvent.Hurting -= OnHurting;
             PlayerEvent.SearchingPickup -= OnSearchingPickup;
             PlayerEvent.DroppingAmmo -= DeniableEvent;
-            //PlayerEvent.DroppingItem -= OnDropItem;
+            PlayerEvent.InteractingElevator -= DeniableEvent;
             PlayerEvent.PlayerDamageWindow -= PlayerDamagingWindow;
 
             ServerEvent.EndingRound -= OnEndingRound;
@@ -126,10 +109,7 @@ namespace CustomGameModes.GameModes
 
             Scp914Handler.Activating -= Activate914;
             Scp914Handler.UpgradingPickup -= UpgradePickup;
-            //Scp914Handler.ChangingKnobSetting -= DeniableEvent;
-            //Scp914Handler.UpgradingPickup -= DeniableEvent;
-            Scp914Handler.UpgradingInventoryItem -= DeniableEvent;
-            //Scp914Handler.UpgradingPlayer -= DeniableEvent;
+            Scp914Handler.UpgradingInventoryItem -= UpgradeInventory;
             // -------------------------------------------------------------
             // -------------------------------------------------------------
 
@@ -164,20 +144,28 @@ namespace CustomGameModes.GameModes
                 ev.LeadingTeam = LeadingTeam.FacilityForces;
                 ev.IsAllowed = true;
             }
+            if (Manager?.Humans().Count == 0)
+            {
+                ev.LeadingTeam = LeadingTeam.Anomalies;
+                ev.IsAllowed = true;
+            }
         }
 
         private void PlayerDamagingWindow(DamagingWindowEventArgs ev)
         {
+            if (Manager == null) return;
+
             if (ev.Window.Room.Type == RoomType.LczGlassBox)
             {
-                if (!beastReleased)
+                if (!Manager.BeastReleased)
                 {
                     DeniableEvent(ev);
                 }
                 else if (!cassieBeastEscaped)
                 {
                     cassieBeastEscaped = true;
-                    Cassie.MessageTranslated("S C P 9 3 9 has escaped containment", "SCP-939 Has Escaped Containment");
+                    var (cassie, caption) = beastName();
+                    Cassie.MessageTranslated($"{cassie} has escaped containment", $"{caption} Has Escaped Containment");
                 }
             }
         }
@@ -209,15 +197,21 @@ namespace CustomGameModes.GameModes
 
         private void OnInteractDoor(InteractingDoorEventArgs ev)
         {
-            if (Manager == null) { ev.IsAllowed = false; return; }
-
-            if (ev.Door == beastDoor || ev.Door.Zone != ZoneType.LightContainment)
+            if (Manager == null) 
             {
                 DeniableEvent(ev);
             }
-            else if (Room.Get(RoomType.LczArmory).Doors.Contains(ev.Door) && ev.Door.IsOpen)
+            else if (ev.Door == beastDoor || ev.Door.Zone != ZoneType.LightContainment || ev.Door.IsElevator)
             {
                 DeniableEvent(ev);
+            }
+            else if (ev.Door.Room.Type == RoomType.LczArmory && ev.Door.IsOpen)
+            {
+                DeniableEvent(ev);
+            }
+            else if (ev.Door.Type == DoorType.Airlock)
+            {
+                // do nothing
             }
             else
             {
@@ -225,15 +219,19 @@ namespace CustomGameModes.GameModes
                 {
                     // everyone can open all the LCZ doors once time is almost out
                     ev.Door.IsOpen = true;
+                    DeniableEvent(ev);
+                }
+                else
+                {
+                    if (DoorsReopenAfterClosing.Contains(ev.Door) && ev.Door.IsOpen)
+                    {
+                        Timing.CallDelayed(2f, () =>
+                        {
+                            ev.Door.IsOpen = true;
+                        });
+                    }
                 }
 
-                if (DoorsReopenAfterClosing.Contains(ev.Door) && ev.Door.IsOpen)
-                {
-                    Timing.CallDelayed(2f, () =>
-                    {
-                        ev.Door.IsOpen = true;
-                    });
-                }
             }
         }
 
@@ -257,44 +255,48 @@ namespace CustomGameModes.GameModes
                 DeniableEvent(ev);
         }
 
-        private void UpgradePickup(UpgradingPickupEventArgs ev)
+        private void UpgradeInventory(UpgradingInventoryItemEventArgs ev)
         {
             if (Manager == null) { ev.IsAllowed = false; return; }
 
-            if (ev.Pickup.Type.IsKeycard() && ev.KnobSetting >= Scp914KnobSetting.Fine)
+            if (UpgradeHelper.Upgrade(ev, out Item newItem))
             {
-                Pickup.CreateAndSpawn(ev.Pickup.Type switch
+                DeniableEvent(ev);
+                if (ev.Item != newItem)
                 {
-                    ItemType.KeycardFacilityManager => ItemType.KeycardO5,
-                    _ => ItemType.KeycardFacilityManager,
-                }, ev.OutputPosition, ev.Pickup.Rotation, previousOwner: ev.Pickup.PreviousOwner);
-                ev.Pickup.Destroy();
+                    ev.Player.AddItem(newItem);
+                    ev.Player.RemoveItem(ev.Item);
+                }
+            }
+            else
+            {
                 DeniableEvent(ev);
             }
-            else if (InventoryItemLoader.AvailableItems.TryGetValue(ev.Pickup.Type, out var value) && value.TryGetComponent<Scp914ItemProcessor>(out var processor))
+        }
+
+        private void UpgradePickup(UpgradingPickupEventArgs ev)
+        {
+            if (Manager == null) { ev.IsAllowed = false; return; }
+            
+            if (UpgradeHelper.Upgrade(ev, out Pickup newPickup))
             {
-                var newPickupBase = processor.OnPickupUpgraded(ev.KnobSetting, ev.Pickup.Base, ev.OutputPosition);
-
-                if (newPickupBase == null)
-                {
-                    ev.Pickup.Position = ev.OutputPosition;
-                    DeniableEvent(ev);
-                    return;
-                }
-
-                var newPickup = Pickup.Get(newPickupBase);
-                Manager.ClaimedPickups[newPickup] = ev.Pickup.PreviousOwner;
+                DeniableEvent(ev);
                 if (newPickup != ev.Pickup)
                 {
-                    Manager.ClaimedPickups.Remove(ev.Pickup);
+                    newPickup.Spawn(ev.OutputPosition, ev.Pickup.Rotation, previousOwner: ev.Pickup.PreviousOwner);
                     ev.Pickup.Destroy();
                 }
-
-                Log.Info($"914 created {newPickup.Type}");
+                else
+                {
+                    ev.Pickup.Position = ev.OutputPosition;
+                }
             }
-
-            DeniableEvent(ev);
+            else
+            {
+                DeniableEvent(ev);
+            }
         }
+
 
         public void DeniableEvent(IDeniableEvent ev)
         {
@@ -405,6 +407,9 @@ namespace CustomGameModes.GameModes
                 }
             }
 
+            Exiled.API.Features.Toys.Light.Create(Scp914Controller.Singleton.IntakeChamber.position);
+            Exiled.API.Features.Toys.Light.Create(Scp914Controller.Singleton.OutputChamber.position);
+
             #endregion
             // ----------------------------------------------------------------------------------------------------------------
             // ----------------------------------------------------------------------------------------------------------------
@@ -442,11 +447,13 @@ namespace CustomGameModes.GameModes
             Manager.PlayerCompleteAllTasks += onPlayerCompleteAllTasks;
             while (elapsedTime() < timerTotalSeconds)
             {
+                teleportPlayersOutOfHcz();
                 var t = timerTotalSeconds - elapsedTime();
                 if (!ReleaseOneMinuteWarning && t <= 60)
                 {
                     ReleaseOneMinuteWarning = true;
-                    CassieCountdownHelper.SayTimeReminder(t, "until s c p 9 3 9 escapes");
+                    var (cassie, _) = beastName();
+                    CassieCountdownHelper.SayTimeReminder(t, $"until {cassie} escapes");
                 }
                 if (!ReleaseCountdown && t <= 10)
                 {
@@ -463,13 +470,10 @@ namespace CustomGameModes.GameModes
             Cassie.Clear();
 
             Log.Debug("DHAS - starting main timer");
-            beastReleased = true;
+            Manager.BeastReleased = true;
             timerTotalSeconds = RoundTime;
             timerStartedTime = DateTime.Now;
             getBroadcast = (p) => p.MainGameBroadcast;
-
-            foreach (var beast in Manager.Beast())
-                beast.player.ShowHint("Break Free", 7);
 
             removeTime(0);
 
@@ -487,7 +491,13 @@ namespace CustomGameModes.GameModes
 
             while (elapsedTime() < timerTotalSeconds)
             {
+                teleportPlayersOutOfHcz();
                 var t = timerTotalSeconds - elapsedTime();
+
+                if (Manager.Humans().Count == 1 && t > 65)
+                {
+                    removeTime(t - 61);
+                }
 
                 if (!FiveMinuteWarning && t <= 300 && t % 30 == 0)
                 {
@@ -539,6 +549,7 @@ namespace CustomGameModes.GameModes
             {
                 var item = classD.player.AddItem(ItemType.MicroHID);
                 classD.player.CurrentItem = item;
+                classD.player.Health = 9999;
             }
 
             Manager.StopAll();
@@ -558,9 +569,8 @@ namespace CustomGameModes.GameModes
                 if (Manager.Humans().Count == 0) return;
 
                 Cassie.Clear();
-                var spectators = Manager.Spectators().Count;
-                var verb = spectators == 1 ? "is" : "are";
-                Cassie.DelayedMessage($"{spectators} personnel {verb} dead", 1f, isNoisy: false);
+                var alive = Manager.Humans().Count;
+                Cassie.DelayedMessage($"{alive} personnel remain", 1f, isNoisy: false);
             });
         }
 
@@ -568,5 +578,27 @@ namespace CustomGameModes.GameModes
         {
             Cassie.MessageTranslated("Personnel Has Completed All Tasks", $"{ev.DisplayNickname} has completed all tasks.", isNoisy: false);
         }
+
+        private void teleportPlayersOutOfHcz()
+        {
+            foreach (Player player in Player.List)
+            {
+                if (player.Zone != ZoneType.LightContainment)
+                {
+                    player.Position = RoleTypeId.Scientist.GetRandomSpawnLocation().Position;
+                }
+            }
+        }
+
+        private (string cassie, string caption) beastName() => Manager?.Beast().FirstOrDefault()?.RoleType switch
+        {
+            RoleTypeId.Scp939 => ("s c p 9 3 9", "SCP-939"),
+            RoleTypeId.Scp096 => ("s c p 0 9 6", "SCP-096"),
+            RoleTypeId.Scp049 => ("s c p 0 4 9", "SCP-049"),
+            RoleTypeId.Scp106 => ("s c p 1 0 6", "SCP-106"),
+            RoleTypeId.Scp173 => ("s c p 1 7 3", "SCP-173"),
+            RoleTypeId.Scp3114 => ("s c p 3 1 1 4", "SCP-3114"),
+            _ => ("", ""),
+        };
     }
 }

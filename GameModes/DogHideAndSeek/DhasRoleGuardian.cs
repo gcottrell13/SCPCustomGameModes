@@ -2,18 +2,14 @@
 using Exiled.API.Extensions;
 using Exiled.API.Features;
 using Exiled.API.Features.Doors;
-using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
 using Exiled.API.Structs;
 using Exiled.Events.EventArgs.Player;
-using HarmonyLib;
 using MEC;
 using PlayerRoles;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using UnityEngine;
 using PlayerEvent = Exiled.Events.Handlers.Player;
 
 namespace CustomGameModes.GameModes
@@ -22,7 +18,7 @@ namespace CustomGameModes.GameModes
     {
         public const string name = "guardian";
 
-        public override RoleTypeId RoleType() => RoleTypeId.Scientist;
+        public override RoleTypeId RoleType => RoleTypeId.Scientist;
         private RoleTypeId _escapedRole = RoleTypeId.NtfCaptain;
 
         public int RemainingLives;
@@ -37,7 +33,10 @@ namespace CustomGameModes.GameModes
 
         public DhasRoleGuardian(Player player, DhasRoleManager manager) : base(player, manager)
         {
-            player.Role.Set(RoleType(), RoleSpawnFlags.UseSpawnpoint);
+            player.Role.Set(RoleType, RoleSpawnFlags.UseSpawnpoint);
+
+            // since we have a never ending task, we can't accept any cooperative tasks.
+            AlreadyAcceptedCooperativeTasks = player;
         }
 
         /// <summary>
@@ -74,40 +73,21 @@ namespace CustomGameModes.GameModes
         [CrewmateTask(TaskDifficulty.Medium)]
         private IEnumerator<float> EscapeToHcz()
         {
-            var allowedDoors = new List<Door>()
-            {
-                Door.Get(DoorType.CheckpointLczA),
-                Door.Get(DoorType.CheckpointLczB),
-                Door.Get(DoorType.ElevatorLczA),
-                Door.Get(DoorType.ElevatorLczB),
-            };
+            Room armory = Room.Get(RoomType.LczArmory);
+            Door insideDoor = armory.Doors.FirstOrDefault(d => d.Rooms.Count == 1);
+            Vector3 insideDirection = insideDoor.Position - armory.Doors.FirstOrDefault(d => d.Rooms.Count == 2).Position;
+            insideDirection.Normalize();
 
-            allowedDoors.AddRange(Door.Get(door => door.Rooms.Count == 1 && door.Room.Type switch
+            while (player.CurrentRoom != armory || Vector3.Dot(insideDirection, player.Position - insideDoor.Position) < 0 || DistanceTo(insideDoor.Position) < 1)
             {
-                RoomType.LczCheckpointA => true,
-                RoomType.LczCheckpointB => true,
-                _ => false,
-            }));
-
-            Manager.PlayerCanUseDoors(allowedDoors, player);
-            while (player.CurrentRoom.Zone != ZoneType.HeavyContainment)
-            {
-                FormatTask("Escape To Heavy Containment", "");
+                FormatTask("Go Inside the Armory", CompassToRoom(armory));
                 yield return Timing.WaitForSeconds(1);
-            }
-
-            foreach (var door in player.CurrentRoom.Doors)
-            {
-                door.IsOpen = false;
             }
         }
 
         [CrewmateTask(TaskDifficulty.Hard)]
         private IEnumerator<float> ProtectTeammates()
         {
-            // since this is a never-ending task, we can't accept any cooperative tasks.
-            AlreadyAcceptedCooperativeTasks = player;
-
             // bind event listeners
             PlayerEvent.Hurting += Hurting;
             PlayerEvent.Died += OnDied;
@@ -115,7 +95,7 @@ namespace CustomGameModes.GameModes
             equipGuardian();
             yield return Timing.WaitForSeconds(15f);
 
-            yield return WaitHint("Go Back Downstairs and Protect your Teammates!", 10f);
+            yield return WaitHint("Go Back and Protect your Teammates!", 10f);
 
             var message = "Protect your Teammates";
             bool didResetToOneLife = false;
@@ -142,8 +122,6 @@ namespace CustomGameModes.GameModes
                     """, "");
                 yield return Timing.WaitForSeconds(1);
             }
-
-            Manager.ClearPlayerAllowedDoors(player);
         }
 
 

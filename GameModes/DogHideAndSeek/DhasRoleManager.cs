@@ -17,7 +17,6 @@ namespace CustomGameModes.GameModes
 
         public Dictionary<Pickup, Player> ClaimedPickups = new();
         public Dictionary<Player, HashSet<ItemType>> ItemsToDrop = new();
-        public Dictionary<Door, List<Player>> DoorsToOpen = new();
         public Dictionary<Player, DhasRole> PlayerRoles = new();
         public Dictionary<Player, RoleTypeId[]> HurtRoles = new();
         public List<Player> AllowedToUse914 = new();
@@ -45,6 +44,8 @@ namespace CustomGameModes.GameModes
         /// Should the beast be granted special powers?
         /// </summary>
         public bool BeastSickoModeActivate = false;
+
+        public bool BeastReleased = false;
 
         public string[] RoleDistribution;
 
@@ -112,7 +113,6 @@ namespace CustomGameModes.GameModes
             UpgradedPickups.Clear();
             ClaimedPickups.Clear();
             ItemsToDrop.Clear();
-            DoorsToOpen.Clear();
             PlayerRoles.Clear();
             HurtRoles.Clear();
             AllowedToUse914.Clear();
@@ -175,74 +175,6 @@ namespace CustomGameModes.GameModes
         }
 
         #endregion
-
-        #region Doors
-           
-        public void PlayerCanUseDoor(Door door, Player player)
-        {
-            if (DoorsToOpen.TryGetValue(door, out var list))
-            {
-                if (!list.Contains(player)) 
-                    list.Add(player);
-            }
-            else
-            {
-                DoorsToOpen[door] = new() { player };
-            }
-        }
-
-        public void PlayerCannotUseDoor(Door door, Player player)
-        {
-            if (DoorsToOpen.TryGetValue(door, out var list))
-            {
-                list.Remove(player);
-            }
-        }
-
-        public void PlayersCanUseDoor(Door door, ICollection<Player> players)
-        {
-            foreach (var player in players) PlayerCanUseDoor(door, player);
-        }
-
-        public void PlayersCannotUseDoor(Door door, ICollection<Player> players)
-        {
-            foreach (var player in players) PlayerCannotUseDoor(door, player);
-        }
-
-        public void PlayersCanUseDoors(ICollection<Door> doors, ICollection<Player> players)
-        {
-            foreach (var player in players)
-                foreach (var door in doors)
-                    PlayerCanUseDoor(door, player);
-        }
-
-        public void PlayersCannotUseDoors(ICollection<Door> doors, ICollection<Player> players)
-        {
-            foreach (var player in players)
-                foreach (var door in doors)
-                    PlayerCannotUseDoor(door, player);
-        }
-
-        public void PlayerCanUseDoors(ICollection<Door> doors, Player player)
-        {
-            foreach (var door in doors) PlayerCanUseDoor(door, player);
-        }
-
-        public void PlayerCannotUseDoors(ICollection<Door> doors, Player player)
-        {
-            foreach (var door in doors) PlayerCannotUseDoor(door, player);
-        }
-
-        public void ClearPlayerAllowedDoors(Player player)
-        {
-            foreach (var door in DoorsToOpen)
-            {
-                door.Value.Remove(player);
-            }
-        }
-
-        #endregion
-
 
         #region Hurting
 

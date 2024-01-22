@@ -21,7 +21,7 @@ namespace CustomGameModes.GameModes
     {
         public const string name = "classd";
 
-        public override RoleTypeId RoleType() => RoleTypeId.ClassD;
+        public override RoleTypeId RoleType => RoleTypeId.ClassD;
         public override List<dhasTask> Tasks => new()
         {
             GetAKeycard,
@@ -32,7 +32,7 @@ namespace CustomGameModes.GameModes
 
         public DhasRoleClassD(Player player, DhasRoleManager manager) : base(player, manager)
         {
-            player.Role.Set(RoleType(), RoleSpawnFlags.UseSpawnpoint);
+            player.Role.Set(RoleType, RoleSpawnFlags.UseSpawnpoint);
         }
 
         public override void OnStop()

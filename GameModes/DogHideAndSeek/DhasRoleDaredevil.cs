@@ -26,7 +26,7 @@ namespace CustomGameModes.GameModes
 
         private HashSet<Room> GhostlightsThrown = new();
 
-        public override RoleTypeId RoleType() => RoleTypeId.ClassD;
+        public override RoleTypeId RoleType => RoleTypeId.ClassD;
 
         bool givingGhostlight = false;
 
@@ -40,7 +40,7 @@ namespace CustomGameModes.GameModes
 
         public DhasRoleDaredevil(Player player, DhasRoleManager manager) : base(player, manager)
         {
-            player.Role.Set(RoleType(), RoleSpawnFlags.UseSpawnpoint);
+            player.Role.Set(RoleType, RoleSpawnFlags.UseSpawnpoint);
         }
 
         /// <summary>

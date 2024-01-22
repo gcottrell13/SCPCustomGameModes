@@ -21,7 +21,7 @@ namespace CustomGameModes.GameModes
     {
         public const string name = "clinger";
 
-        public override RoleTypeId RoleType() => RoleTypeId.Scientist;
+        public override RoleTypeId RoleType => RoleTypeId.Scientist;
 
         public override void OnStop()
         {
@@ -41,7 +41,7 @@ namespace CustomGameModes.GameModes
 
         public DhasRoleClinger(Player player, DhasRoleManager manager) : base(player, manager)
         {
-            player.Role.Set(RoleType(), RoleSpawnFlags.UseSpawnpoint);
+            player.Role.Set(RoleType, RoleSpawnFlags.UseSpawnpoint);
         }
 
 
@@ -60,7 +60,7 @@ namespace CustomGameModes.GameModes
 
                 while (!IsNear(playerA, requiredDistance, out var dist))
                 {
-                    var compass = GetCompass(playerA.Position);
+                    var compass = CompassToPlayer(playerA);
                     FormatTask($"Be Within {dist} of {PlayerNameFmt(playerA)}", compass);
                     yield return Timing.WaitForSeconds(0.5f);
                 }
@@ -98,7 +98,7 @@ namespace CustomGameModes.GameModes
 
                 while (!IsNear(playerB, requiredFriendDistance, out var dist))
                 {
-                    var compass = GetCompass(playerB.Position);
+                    var compass = CompassToPlayer(playerB);
                     FormatTask($"Be Within {dist} of {PlayerNameFmt(playerB)}", compass);
                     yield return Timing.WaitForSeconds(0.5f);
                 }

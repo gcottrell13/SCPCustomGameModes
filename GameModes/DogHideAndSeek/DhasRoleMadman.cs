@@ -24,7 +24,7 @@ namespace CustomGameModes.GameModes
     {
         public const string name = "madman";
 
-        public override RoleTypeId RoleType() => RoleTypeId.ClassD;
+        public override RoleTypeId RoleType => RoleTypeId.ClassD;
 
         private Player Friend;
         private DhasRole FriendRole;
@@ -44,7 +44,7 @@ namespace CustomGameModes.GameModes
 
         public DhasRoleMadman(Player player, DhasRoleManager manager) : base(player, manager)
         {
-            player.Role.Set(RoleType(), RoleSpawnFlags.UseSpawnpoint);
+            player.Role.Set(RoleType, RoleSpawnFlags.UseSpawnpoint);
         }
 
         /// <summary>
