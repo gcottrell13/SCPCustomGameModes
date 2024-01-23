@@ -1,5 +1,6 @@
 ﻿using CustomGameModes.GameModes;
 using Exiled.API.Interfaces;
+using PlayerRoles;
 using System.Collections.Generic;
 using System.ComponentModel;
 
@@ -25,9 +26,28 @@ namespace CustomGameModes.Configs
         [Description("In Normal, % chance of upgrading player with SCP 5000")]
         public int Scp5000Chance { get; set; } = 5;
 
+        [Description("In DogHideAndSeek, chances of the SCP getting a particular role. Does not have to add up to 100%")]
         public Dictionary<string, float> DhasScpChance { get; set; } = new()
         {
-            { "Scp939", 100f },
+            { nameof(RoleTypeId.Scp939), 100f },
+        };
+
+
+        [Description("In Zombies, chances of the Survivors getting a particular role. Does not have to add up to 100%")]
+        public Dictionary<string, float> SurvivorScpChance { get; set; } = new()
+        {
+            { nameof(RoleTypeId.ClassD), 100f },
+        };
+        [Description("In Zombies, chances of the Infected getting a particular role. Does not have to add up to 100%")]
+        public Dictionary<string, float> InfectedScpChance { get; set; } = new()
+        {
+            { nameof(RoleTypeId.Scp0492), 100f },
+        };
+
+        [Description("In Zombies, chances of the Escapees getting a particular role. Does not have to add up to 100%")]
+        public Dictionary<string, float> EscapeeScpChance { get; set; } = new()
+        {
+            { nameof(RoleTypeId.ChaosConscript), 100f },
         };
     }
 }

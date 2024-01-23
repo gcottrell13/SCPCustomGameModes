@@ -33,7 +33,7 @@ namespace CustomGameModes
         public static Dictionary<string, Func<IGameMode>> GameList = new()
         {
             { "dhas", () => new DogHideAndSeek() },
-            { "z", () => new PeanutRun() },
+            { "z", () => new Infection() },
             { "n", () => new NormalSCPSL() },
         };
 

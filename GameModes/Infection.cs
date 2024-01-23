@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using PlayerEvent = Exiled.Events.Handlers.Player;
+using MapEvent = Exiled.Events.Handlers.Map;
 using ServerEvent = Exiled.Events.Handlers.Server;
 using Exiled.API.Features;
 using MEC;
@@ -17,23 +18,34 @@ using Exiled.API.Structs;
 
 namespace CustomGameModes.GameModes
 {
-    internal class PeanutRun : IGameMode
+    internal class Infection : IGameMode
     {
-        public string Name => "Zombies";
+        public string Name => "Infection";
 
         CoroutineHandle roundLoop;
 
-        const RoleTypeId STARTROLE = RoleTypeId.ClassD;
-        const RoleTypeId SCPROLE = RoleTypeId.Scp0492;
-        static Vector3 SCPSpawnPoint = RoleTypeId.Scp939.GetRandomSpawnLocation().Position;
+        RoleTypeId SurvivorRole;
+        RoleTypeId InfectedRole;
+        RoleTypeId EscapeeRole;
+        private Vector3 SCPSpawnPoint => RoleTypeId.Scp939.GetRandomSpawnLocation().Position;
 
-        public PeanutRun()
+        HashSet<Player> Infected = new HashSet<Player>();
+        HashSet<Player> Survivors = new HashSet<Player>();
+        HashSet<Player> Escapees = new HashSet<Player>();
+
+        public Infection()
         {
+            RoleTypeId parsedRole;
+            InfectedRole = Enum.TryParse(CustomGameModes.Singleton.Config.InfectedScpChance.GetRandom(), out parsedRole) ? parsedRole : RoleTypeId.Scp0492;
+            EscapeeRole = Enum.TryParse(CustomGameModes.Singleton.Config.EscapeeScpChance.GetRandom(), out parsedRole) ? parsedRole : RoleTypeId.ChaosConscript;
+            SurvivorRole = Enum.TryParse(CustomGameModes.Singleton.Config.SurvivorScpChance.GetRandom(), out parsedRole) ? parsedRole : RoleTypeId.ClassD;
+
             // set this so that the SCPs can properly get a win screen, even if they're all zombies
             Round.EscapedScientists = -1;
+            Round.EscapedDClasses = -1;
         }
 
-        ~PeanutRun()
+        ~Infection()
         {
             OnRoundEnd();
         }
@@ -46,7 +58,12 @@ namespace CustomGameModes.GameModes
             PlayerEvent.SearchingPickup += OnSearchingPickup;
             PlayerEvent.Hurting += OnHurting;
             PlayerEvent.InteractingDoor += OnDoor;
+            PlayerEvent.ActivatingWarheadPanel += DeniableEvent;
+            PlayerEvent.InteractingElevator += OnElevator;
+
             ServerEvent.RespawningTeam += DeniableEvent;
+
+            MapEvent.AnnouncingScpTermination += DeniableEvent;
 
             roundLoop = Timing.RunCoroutine(_roundLoop());
         }
@@ -58,7 +75,12 @@ namespace CustomGameModes.GameModes
             PlayerEvent.SearchingPickup -= OnSearchingPickup;
             PlayerEvent.Hurting -= OnHurting;
             PlayerEvent.InteractingDoor -= OnDoor;
+            PlayerEvent.ActivatingWarheadPanel -= DeniableEvent;
+            PlayerEvent.InteractingElevator -= OnElevator;
+
             ServerEvent.RespawningTeam -= DeniableEvent;
+
+            MapEvent.AnnouncingScpTermination -= DeniableEvent;
 
             if (roundLoop.IsRunning)
                 Timing.KillCoroutines(roundLoop);
@@ -80,10 +102,10 @@ namespace CustomGameModes.GameModes
             {
                 Action<Player> setup = i switch
                 {
-                    0 => SetupSCP,
-                    1 => SetupClassD,
-                    2 => SetupSCP,
-                    _ => SetupClassD,
+                    0 => SetupInfected,
+                    1 => SetupSurvivor,
+                    2 => SetupInfected,
+                    _ => SetupSurvivor,
                 };
 
                 setup(players[i]);
@@ -103,14 +125,22 @@ namespace CustomGameModes.GameModes
                 try
                 {
 
+                    var survivorsAndEscapees = Survivors.Union(Escapees).ToHashSet();
+                    var inLcz = survivorsAndEscapees.Where(p => p.Zone == ZoneType.LightContainment).Count();
+                    var inHcz = survivorsAndEscapees.Where(p => p.Zone == ZoneType.HeavyContainment).Count();
+                    var inEz = survivorsAndEscapees.Where(p => p.Zone == ZoneType.Entrance || p.CurrentRoom.Type == RoomType.HczEzCheckpointA || p.CurrentRoom.Type == RoomType.HczEzCheckpointB).Count();
+                    var inSurface = survivorsAndEscapees.Where(p => p.Zone == ZoneType.Surface).Count();
+
+                    if (inLcz == 0 && inHcz == 0 && survivorsAndEscapees.Count > 0)
+                    {
+                        if (!Warhead.IsInProgress)
+                        {
+                            Warhead.Start();
+                        }
+                    }
+
                 SCPHUD:
                     {
-                        var humans = Player.Get(p => p.IsHuman).ToList();
-                        var inLcz = humans.Where(p => p.Zone == ZoneType.LightContainment).Count();
-                        var inHcz = humans.Where(p => p.Zone == ZoneType.HeavyContainment).Count();
-                        var inEz = humans.Where(p => p.Zone == ZoneType.Entrance || p.CurrentRoom.Type == RoomType.HczEzCheckpointA || p.CurrentRoom.Type == RoomType.HczEzCheckpointB).Count();
-                        var inSurface = humans.Where(p => p.Zone == ZoneType.Surface).Count();
-
                         IEnumerable<string> lines()
                         {
                             if (inLcz > 0) yield return $"<color=orange>LCZ: {inLcz}</color>";
@@ -121,10 +151,10 @@ namespace CustomGameModes.GameModes
 
                         var message = string.Join(" | ", lines());
 
-                        foreach (var scp in Player.Get(p => p.Role.Team == Team.SCPs))
+                        foreach (var scp in Infected)
                         {
                             scp.Broadcast(2, $"""
-                            Where to Find the Class-Ds:
+                            Where to Find the {SurvivorRole}:
                             {message}
                             """, shouldClearPrevious: true);
                         }
@@ -132,15 +162,11 @@ namespace CustomGameModes.GameModes
 
                 ChaosHUD:
                     {
-                        var chaosPlayers = Player.Get(p => p.Role.Team == Team.ChaosInsurgency).ToList();
-
-                        if (chaosPlayers.Count > 0)
+                        if (Escapees.Count > 0)
                         {
-                            var scpCount = Player.Get(p => p.IsScp).Count();
-                            var cdCount = Player.Get(p => p.Role == STARTROLE).Count();
-                            var scpMsg = $"<color=red>SCPs</color>: {scpCount}";
-                            var cdMsg = $"<color=orange>Class-D</color>: {cdCount}";
-                            foreach (var ci in chaosPlayers)
+                            var scpMsg = $"<color=red>{InfectedRole}</color>: {Infected.Count}";
+                            var cdMsg = $"<color=orange>{SurvivorRole}</color>: {Survivors.Count}";
+                            foreach (var ci in Escapees)
                             {
                                 ci.Broadcast(2, $"{scpMsg} - {cdMsg}", shouldClearPrevious: true);
                             }
@@ -159,33 +185,67 @@ namespace CustomGameModes.GameModes
         //-----------------------------------------------------------------------------------------------------------------------------------
         //-----------------------------------------------------------------------------------------------------------------------------------
 
-        void SetupSCP(Player scp) => SetupSCP(scp, SCPROLE);
-
-        public void SetupSCP(Player scp, RoleTypeId role)
+        public void SetupInfected(Player player)
         {
-            scp.Role.Set(role, RoleSpawnFlags.None);
-            scp.Teleport(SCPSpawnPoint + Vector3.up);
+            player.Role.Set(RoleTypeId.Scp0492, RoleSpawnFlags.None);
+            player.Teleport(SCPSpawnPoint + Vector3.up);
+            Infected.Add(player);
+            player.CustomInfo = "<color=#FF6448>Infected</color>";
 
-            if (Round.EscapedDClasses > 0)
+            if (InfectedRole != RoleTypeId.Scp0492)
             {
-                Timing.CallDelayed(15, () => ShowEscapedMessage(scp));
+                Timing.CallDelayed(0.1f, () => player.ChangeAppearance(InfectedRole));
+            }
+
+            if (Escapees.Count > 0)
+            {
+                Timing.CallDelayed(15, () => ShowEscapedMessage(player));
             }
             else
             {
-                Timing.CallDelayed(15, () => ShowSCPStartupMessage(scp));
+                Timing.CallDelayed(15, () => ShowInfectedStartupMessage(player));
             }
         }
 
-        public void SetupClassD(Player player)
+        public void SetupSurvivor(Player player)
         {
-            player.Role.Set(STARTROLE, RoleSpawnFlags.UseSpawnpoint);
+            player.Role.Set(RoleTypeId.ClassD, RoleSpawnFlags.UseSpawnpoint);
             player.ClearInventory();
+            player.CustomInfo = "<color=#FF9966>Survivor</color>";
+
             player.CurrentItem = player.AddItem(ItemType.KeycardO5);
             player.AddItem(ItemType.Lantern);
-            player.AddItem(ItemType.SCP207, 3);
-            player.AddItem(ItemType.SCP500, 1);
 
-            Timing.CallDelayed(15, () => ShowClassDStartupMessage(player));
+            if (SurvivorRole != RoleTypeId.ClassD)
+            {
+                Timing.CallDelayed(1f, () => player.ChangeAppearance(SurvivorRole));
+            }
+
+            Survivors.Add(player);
+
+
+            Timing.CallDelayed(15, () => ShowSurvivorStartupMessage(player));
+        }
+
+        public void SetupEscapee(Player player)
+        {
+            player.ClearInventory();
+            player.Role.Set(RoleTypeId.ChaosConscript);
+
+            player.AddItem(ItemType.GunCOM18);
+            AddFlashlightToGun(player);
+
+            Survivors.Remove(player);
+            Escapees.Add(player);
+
+            player.CustomInfo = "<color=#32CD32>Escapee</color>";
+
+            if (EscapeeRole != RoleTypeId.ChaosConscript)
+            {
+                Timing.CallDelayed(1f, () => player.ChangeAppearance(EscapeeRole));
+            }
+
+            Timing.CallDelayed(15, () => ShowEscapeeMessage(player));
         }
 
         //-----------------------------------------------------------------------------------------------------------------------------------
@@ -193,13 +253,13 @@ namespace CustomGameModes.GameModes
 
         public void ShowEscapedMessage(Player scp)
         {
-            scp.ShowHint("""
-                A Class-D has Escaped and returned as Chaos Insurgency!
+            scp.ShowHint($"""
+                A {SurvivorRole} has Escaped and returned as {EscapeeRole}!
                 Beware!
                 """, 20);
         }
 
-        public void ShowClassDStartupMessage(Player classd)
+        public void ShowSurvivorStartupMessage(Player classd)
         {
             classd.ShowHint("""
                 No Picking up Items!
@@ -208,11 +268,25 @@ namespace CustomGameModes.GameModes
                 """, 15);
         }
 
-        public void ShowSCPStartupMessage(Player scp)
+        public void ShowInfectedStartupMessage(Player scp)
         {
-            scp.ShowHint("""
+            scp.ShowHint($"""
                 Tesla Gates are OFF!
-                Kill the <b><color=orange>Class-D</color></b> Before They Escape!
+                Kill the <b><color=orange>{SurvivorRole}</color></b> Before They Escape!
+                """, 15);
+        }
+
+        public void ShowEscapeeMessage(Player esc)
+        {
+            esc.ShowHint($"""
+                Go Kill all the {InfectedRole}!
+                Beware, you can still become a {InfectedRole}!
+
+
+
+
+
+
                 """, 15);
         }
 
@@ -231,59 +305,72 @@ namespace CustomGameModes.GameModes
                 // cannot close doors
                 DeniableEvent(ev);
             }
+            if (Survivors.Contains(ev.Player) && ev.Door.IsGate)
+            {
+                ev.Door.IsOpen = true;
+            }
+        }
+
+        public void OnElevator(InteractingElevatorEventArgs ev)
+        {
+            // the elevators cannot be operated from HCZ.
+            // the LCZ elevators effectively become one-way to HCZ.
+            // the Nuke and SCP049 elevators become disabled.
+            if (ev.Player.Zone == ZoneType.HeavyContainment)
+            {
+                DeniableEvent(ev);
+            }
         }
 
         public void OnHurting(HurtingEventArgs ev)
         {
-            if (Round.EscapedDClasses > 0 && ev.Player.IsScp)
+            if (Survivors.Contains(ev.Attacker))
             {
-                ev.DamageHandler.Damage *= 5;
+                ev.IsAllowed = false;
+                return;
             }
+            ev.Player.HumeShield = 0;
+            ev.DamageHandler.Damage = ev.Player.MaxHealth / 5;
         }
 
         public void OnSearchingPickup(SearchingPickupEventArgs ev)
         {
-            if (ev.Player.Role == STARTROLE) DeniableEvent(ev);
+            if (ev.Player.Role == SurvivorRole) DeniableEvent(ev);
         }
 
         public IEnumerator<float> OnDied(DyingEventArgs ev)
         {
-            if (ev.Player.IsHuman)
+            if (Survivors.Contains(ev.Player) || Escapees.Contains(ev.Player))
             {
+                Survivors.Remove(ev.Player);
+                Escapees.Remove(ev.Player);
                 ev.Player.ClearInventory();
 
-                if (ev.Attacker?.Role.Team == Team.SCPs)
+                if (Infected.Contains(ev.Attacker))
                 {
                     yield return Timing.WaitForSeconds(0.5f);
-                    SetupSCP(ev.Player, ev.Attacker.Role);
+                    SetupInfected(ev.Player);
                     ev.Player.Teleport(ev.Attacker.Position);
                 }
             }
         }
 
-        public IEnumerator<float> OnEscape(EscapingEventArgs e)
+        public void OnEscape(EscapingEventArgs e)
         {
-            foreach (var scp in Player.List.Where(p => p.Role == SCPROLE))
+            e.IsAllowed = false;
+
+            if (!Survivors.Contains(e.Player)) 
+                return;
+
+            SetupEscapee(e.Player);
+
+            foreach (var scp in Player.List.Where(p => p.Role == InfectedRole))
             {
                 ShowEscapedMessage(scp);
             }
-
-            yield return Timing.WaitForSeconds(2);
-            AddFlashlightToCiGun(e.Player);
-            yield return Timing.WaitForSeconds(13);
-            e.Player.ShowHint("""
-                Go Kill all the Zombies!
-                Beware, you can still become a Zombie!
-
-
-
-
-
-
-                """, 15);
         }
 
-        public void AddFlashlightToCiGun(Player player)
+        public void AddFlashlightToGun(Player player)
         {
             foreach (Item item in player.Items)
             {
