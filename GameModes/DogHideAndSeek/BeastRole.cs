@@ -1,20 +1,12 @@
 ﻿using Exiled.API.Enums;
-using Exiled.API.Extensions;
 using Exiled.API.Features;
 using Exiled.API.Features.Doors;
-using Exiled.API.Features.Items;
-using Exiled.API.Features.Pickups;
-using Exiled.Events.EventArgs.Player;
 using UnityEngine;
 using MEC;
 using PlayerRoles;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using PlayerEvent = Exiled.Events.Handlers.Player;
-using PluginAPI.Events;
 using CustomGameModes.API;
 
 namespace CustomGameModes.GameModes
@@ -100,10 +92,7 @@ namespace CustomGameModes.GameModes
                 if (Manager.Humans().Count > 0)
                 {
                     var c = GetNearestCrewmate();
-                    FormatTask(
-                        $"Kill {PlayerNameFmt(c)}", 
-                        $"<b><color=orange><size=50>{CompassToPlayer(c)}</size></color></b>"
-                        );
+                    FormatTask($"Kill {PlayerNameFmt(c)}", HotAndCold(c.Position));
                 }
 
                 yield return Timing.WaitForSeconds(0.5f);

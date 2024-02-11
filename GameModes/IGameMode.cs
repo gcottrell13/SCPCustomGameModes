@@ -11,6 +11,8 @@ namespace CustomGameModes.GameModes
     {
         string Name { get; }
 
+        string PreRoundInstructions { get; }
+
         void OnRoundStart();
         void OnRoundEnd();
 

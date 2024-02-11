@@ -68,10 +68,11 @@ namespace CustomGameModes.GameModes
             Friend = OtherCrewmates.Pool(teammate =>
             {
                 var friendrole = Manager.PlayerRoles[teammate];
-                if (!friendrole.TryGiveCooperativeTasks(player, 1, GetRandomKeycard))
+                //if (!friendrole.TryGiveCooperativeTasks(player, 1, GetRandomKeycard))
+                //    return false;
+                if (!friendrole.TryGiveCooperativeTasks(player, 4, FindMadman))
                     return false;
-                friendrole.TryGiveCooperativeTasks(player, 4, FindMadman);
-                Log.Debug($"Gave 2 tasks to friend {teammate.DisplayNickname}");
+                Log.Debug($"Gave 1 task(s) to friend {teammate.DisplayNickname}");
                 return true;
             });
 
@@ -100,24 +101,24 @@ namespace CustomGameModes.GameModes
                 if (Friend.IsDead) goto FriendDead;
 
                 var compass = HotAndCold(Friend.Position);
-                FormatTask($"Go get a keycard from {PlayerNameFmt(Friend)}.", compass);
+                FormatTask($"Go get a {friendPickupType} from {PlayerNameFmt(Friend)}.", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
 
             while (NotHasItem(keycardFriendPickup.Type, out var item))
             {
                 var compass = GetCompass(keycardFriendPickup.Position);
-                FormatTask($"Get the keycard that {PlayerNameFmt(Friend)} dropped for you.", compass);
+                FormatTask($"Get the {friendPickupType} that {PlayerNameFmt(Friend)} dropped for you.", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
 
             goto End;
         FriendDead:
             {
-                var item = EnsureItem(ItemType.KeycardMTFPrivate);
+                var item = EnsureItem(friendPickupType);
                 yield return WaitHint($"""
                     {PlayerNameFmt(Friend)} died. 
-                    A consolation keycard has been added to your inventory.
+                    A consolation {friendPickupType} has been added to your inventory.
                     """, 10);
             }
         End: 
@@ -137,7 +138,7 @@ namespace CustomGameModes.GameModes
             while (!doorOpened && DistanceTo(Cube.Position) > 7)
             {
                 var compass = GetCompass(CUBE.Position);
-                FormatTask("Go to THE CUBE in PT-01", compass);
+                FormatTask("Go to THE CUBE in PT-00", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
 
@@ -247,7 +248,7 @@ namespace CustomGameModes.GameModes
 
         void killed(DyingEventArgs ev)
         {
-            if (ev.Attacker?.Role.Team == Team.SCPs)
+            if (ev.Player == player && ev.Attacker?.Role.Team == Team.SCPs)
             {
                 worthIt = true;
             }
@@ -267,7 +268,7 @@ namespace CustomGameModes.GameModes
         Pickup keycardFriendPickup;
         void OnDroppedItem(DroppedItemEventArgs ev)
         {
-            if (keycardFriendPickup == null && ev.Player == Friend && ev.Pickup.Type == friendPickup.Type)
+            if (keycardFriendPickup == null && ev.Player == Friend && ev.Pickup.Type == friendPickupType)
             {
                 keycardFriendPickup = ev.Pickup;
             }
@@ -277,23 +278,7 @@ namespace CustomGameModes.GameModes
 
         #region Friend Tasks
 
-
-        Pickup friendPickup;
-
-        [CrewmateTask(TaskDifficulty.Easy)]
-        private IEnumerator<float> GetRandomKeycard()
-        {
-            bool predicate(Pickup pickup) => pickup.Type.IsKeycard();
-            void onFail() { Friend.CurrentItem = Friend.AddItem(ItemType.KeycardScientist); }
-
-            while (FriendRole.GoGetPickup(predicate, onFail) && FriendRole.MyTargetPickup != null)
-            {
-                friendPickup = FriendRole.MyTargetPickup;
-                var compass = FriendRole.GetCompass(FriendRole.MyTargetPickup.Position);
-                FriendRole.FormatTask("Pick up a Keycard", compass);
-                yield return Timing.WaitForSeconds(0.5f);
-            }
-        }
+        private ItemType friendPickupType = ItemType.Lantern;
 
         [CrewmateTask(TaskDifficulty.Easy)]
         private IEnumerator<float> FindMadman()
@@ -311,23 +296,29 @@ namespace CustomGameModes.GameModes
                 Tell {myName}:
                 I can tell you're going through a hard time right now.
                 It's OK, I'm here for you.
-                """, 15f);
+                """, 7f);
 
-            Manager.CanDropItem(friendPickup.Type, Friend);
-
-            PlayerEvent.DroppedItem += OnDroppedItem;
-
-            while (keycardFriendPickup == null)
+            if (!Friend.IsInventoryFull)
             {
-                FriendRole.FormatTask($"Drop the {friendPickup.Type} for {myName}", "");
-                yield return Timing.WaitForSeconds(1);
+                Friend.CurrentItem = Friend.AddItem(friendPickupType);
+                Manager.CanDropItem(friendPickupType, Friend);
+                PlayerEvent.DroppedItem += OnDroppedItem;
+
+                while (keycardFriendPickup == null)
+                {
+                    FriendRole.FormatTask($"Drop the {friendPickupType} for {myName}", "");
+                    yield return Timing.WaitForSeconds(1);
+                }
+
+                PlayerEvent.DroppedItem -= OnDroppedItem;
+                Manager.CannotDropItem(friendPickupType, Friend);
+            }
+            else
+            {
+                keycardFriendPickup = Pickup.CreateAndSpawn(friendPickupType, Friend.Position + Vector3.up, default, Friend);
             }
 
             Manager.ClaimedPickups[keycardFriendPickup] = player;
-
-            PlayerEvent.DroppedItem -= OnDroppedItem;
-
-            Manager.CannotDropItem(friendPickup.Type, Friend);
         }
 
         #endregion

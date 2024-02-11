@@ -439,7 +439,7 @@ namespace CustomGameModes.GameModes
                 < 30 => "Lukewarm",
                 < 60 => "Colder",
                 < 100 => "Freezing",
-                _ => "Really Far",
+                _ => "Far",
             };
 
             var color = distance switch

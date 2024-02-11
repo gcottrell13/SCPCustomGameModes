@@ -3,19 +3,12 @@ using CustomGameModes.GameModes;
 using Exiled.API.Features;
 using Exiled.Events.EventArgs.Server;
 using MEC;
-using Mirror;
-using PluginAPI.Events;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Linq;
 using UnityEngine;
 using ServerEvent = Exiled.Events.Handlers.Server;
 using PlayerEvent = Exiled.Events.Handlers.Player;
 using Exiled.Events.EventArgs.Player;
-using Exiled.API.Features.Doors;
 using CustomGameModes.GameModes.Normal;
 
 namespace CustomGameModes
@@ -24,6 +17,8 @@ namespace CustomGameModes
     {
         public static IGameMode CurrentGame;
         public static bool IsLobby => !Round.IsStarted && !Round.IsEnded;
+
+        CoroutineHandle DisplayCurrentGame;
 
         ~EventHandlers()
         {
@@ -35,6 +30,8 @@ namespace CustomGameModes
             { "dhas", () => new DogHideAndSeek() },
             { "z", () => new Infection() },
             { "n", () => new NormalSCPSL() },
+            { "t", () => new Tutorial() },
+            { "5k", () => new Scp5000Test() },
         };
 
         internal void RegisterEvents()
@@ -67,6 +64,7 @@ namespace CustomGameModes
 
         private void OnRoundStarted()
         {
+            if (DisplayCurrentGame.IsRunning) Timing.KillCoroutines(DisplayCurrentGame);
             Timing.CallDelayed(
                 0.1f,
                 () =>
@@ -120,15 +118,29 @@ namespace CustomGameModes
                 goto GetGame;
             }
             SetNextGame(gameConstructor);
+
+            if (DisplayCurrentGame.IsRunning) Timing.KillCoroutines(DisplayCurrentGame);
+
+            DisplayCurrentGame = Timing.RunCoroutine(DisplayCurrentGameCo());
         }
 
         public static void SetNextGame(Func<IGameMode> constructor)
         {
             CurrentGame = constructor();
+        }
 
-            foreach (var player in Player.List)
+        public IEnumerator<float> DisplayCurrentGameCo()
+        {
+            while (true)
             {
-                player.Broadcast(new($"Next game is {CurrentGame.Name}", 100), true);
+                foreach (var player in Player.List)
+                {
+                    player.Broadcast(new($"""
+                        Next game is {CurrentGame.Name}
+                        <size={CustomGameModes.Singleton.Config.PregameRoundInstructionSize}>{CurrentGame.PreRoundInstructions}</size>
+                        """, 11), true);
+                }
+                yield return Timing.WaitForSeconds(10f);
             }
         }
     }

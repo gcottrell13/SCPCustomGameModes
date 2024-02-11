@@ -15,7 +15,9 @@ namespace CustomGameModes.Commands
 
         public string[] Aliases => new[] { "sng" };
 
-        public string Description => "Sets the next Game mode";
+        public string Description => $"Sets the next Game mode. Options: {GameList}";
+
+        public string GameList => string.Join(", ", EventHandlers.GameList.Keys);
 
         public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
         {

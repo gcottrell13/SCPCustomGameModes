@@ -19,7 +19,6 @@ namespace CustomGameModes.GameModes
         public const string name = "guardian";
 
         public override RoleTypeId RoleType => RoleTypeId.Scientist;
-        private RoleTypeId _escapedRole = RoleTypeId.NtfCaptain;
 
         public int RemainingLives;
 
@@ -48,7 +47,7 @@ namespace CustomGameModes.GameModes
             {
                 // unbind
                 PlayerEvent.Hurting -= Hurting;
-                PlayerEvent.Died -= OnDied;
+                PlayerEvent.Dying -= OnDying;
             }
         }
 
@@ -90,16 +89,22 @@ namespace CustomGameModes.GameModes
         {
             // bind event listeners
             PlayerEvent.Hurting += Hurting;
-            PlayerEvent.Died += OnDied;
+            PlayerEvent.Dying += OnDying;
 
             equipGuardian();
-            yield return Timing.WaitForSeconds(15f);
+
+            if (OtherCrewmates.Count == 0)
+            {
+                yield return WaitHint("Avoid the Beast", 60);
+                yield break;
+            }
 
             yield return WaitHint("Go Back and Protect your Teammates!", 10f);
 
             var message = "Protect your Teammates";
+            var teleports = "";
             bool didResetToOneLife = false;
-            RemainingLives = 5;
+            RemainingLives = 4;
 
             while (IsRunning)
             {
@@ -109,17 +114,25 @@ namespace CustomGameModes.GameModes
                     {
                         didResetToOneLife = true;
                         message = "Your Teammates are all Dead!";
-                        RemainingLives = 1;
+                        RemainingLives = 0;
                     }
                 }
 
-                var a = new List<string>();
-                for (int i = 0; i < RemainingLives; i++) a.Add("❤");
+                if (RemainingLives > 0)
+                {
+                    var a = new List<string>();
+                    for (int i = 0; i < RemainingLives; i++) a.Add("❤");
+                    teleports = $"""
+                        Remaining Emergency Teleports: 
+                        <size=70><color=red>{strong(string.Join("", a))}</color></size>
+                        """;
+                }
+                else
+                {
+                    teleports = "No More Emergency Teleports!";
+                }
 
-                FormatTask($"""
-                    {message}
-                    Remaining Lives: {string.Join("", a)}
-                    """, "");
+                FormatTask(message, teleports);
                 yield return Timing.WaitForSeconds(1);
             }
         }
@@ -135,12 +148,13 @@ namespace CustomGameModes.GameModes
             }
         }
 
-        private FirearmType gun = FirearmType.E11SR;
-        private AttachmentIdentifier flashlightAttachment => AttachmentIdentifier.Get(gun, InventorySystem.Items.Firearms.Attachments.AttachmentName.Flashlight);
+        private const FirearmType gun = FirearmType.E11SR;
+        private AttachmentIdentifier flashlightAttachment = AttachmentIdentifier.Get(gun, InventorySystem.Items.Firearms.Attachments.AttachmentName.Flashlight);
 
         private void equipGuardian()
         {
-            player.Role.Set(_escapedRole, RoleSpawnFlags.None);
+            player.Health = 100;
+            player.ArtificialHealth = 50;
             player.AddAmmo(AmmoType.Nato556, 50);
             player.CurrentItem = EnsureFirearm(gun, flashlightAttachment);
             EnsureItem(ItemType.Flashlight);
@@ -148,16 +162,28 @@ namespace CustomGameModes.GameModes
             EnsureItem(ItemType.KeycardO5);
         }
 
-        private void OnDied(DiedEventArgs ev)
+        private void OnDying(DyingEventArgs ev)
         {
+            if (ev.Player != player) return;
+
             RemainingLives--;
 
-            if (RemainingLives <= 0) return;
+            if (RemainingLives < 0) return;
+
+            ev.IsAllowed = false;
+
+            player.EnableEffect(EffectType.Vitality, 5f);
+            player.EnableEffect(EffectType.Flashed, 0.5f);
 
             equipGuardian();
-            ev.Player.Role.Set(_escapedRole, RoleSpawnFlags.None);
-            player.Position = GetFarthestCrewmate()?.Position 
-                ?? SpawnLocationType.Inside173Bottom.GetPosition() + UnityEngine.Vector3.up;
+            if (GetFarthestCrewmate() is Player teammate)
+            {
+                player.Position = teammate.Position;
+            }
+            else
+            {
+                player.Position = RoleTypeId.Scientist.GetRandomSpawnLocation().Position + UnityEngine.Vector3.up;
+            }
         }
 
         #endregion

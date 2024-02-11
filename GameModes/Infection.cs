@@ -15,12 +15,15 @@ using Exiled.API.Enums;
 using Exiled.API.Extensions;
 using CustomGameModes.API;
 using Exiled.API.Structs;
+using Exiled.API.Features.Doors;
 
 namespace CustomGameModes.GameModes
 {
     internal class Infection : IGameMode
     {
         public string Name => "Infection";
+
+        public string PreRoundInstructions => "";
 
         CoroutineHandle roundLoop;
 
@@ -32,6 +35,9 @@ namespace CustomGameModes.GameModes
         HashSet<Player> Infected = new HashSet<Player>();
         HashSet<Player> Survivors = new HashSet<Player>();
         HashSet<Player> Escapees = new HashSet<Player>();
+
+        bool ClosedLcz = false;
+        bool ClosedHcz = false;
 
         public Infection()
         {
@@ -56,7 +62,6 @@ namespace CustomGameModes.GameModes
             PlayerEvent.Escaping += OnEscape;
             PlayerEvent.Dying += OnDied;
             PlayerEvent.SearchingPickup += OnSearchingPickup;
-            PlayerEvent.Hurting += OnHurting;
             PlayerEvent.InteractingDoor += OnDoor;
             PlayerEvent.ActivatingWarheadPanel += DeniableEvent;
             PlayerEvent.InteractingElevator += OnElevator;
@@ -73,7 +78,6 @@ namespace CustomGameModes.GameModes
             PlayerEvent.Escaping -= OnEscape;
             PlayerEvent.Dying -= OnDied;
             PlayerEvent.SearchingPickup -= OnSearchingPickup;
-            PlayerEvent.Hurting -= OnHurting;
             PlayerEvent.InteractingDoor -= OnDoor;
             PlayerEvent.ActivatingWarheadPanel -= DeniableEvent;
             PlayerEvent.InteractingElevator -= OnElevator;
@@ -122,6 +126,7 @@ namespace CustomGameModes.GameModes
 
             while (Round.InProgress)
             {
+
                 try
                 {
 
@@ -131,13 +136,7 @@ namespace CustomGameModes.GameModes
                     var inEz = survivorsAndEscapees.Where(p => p.Zone == ZoneType.Entrance || p.CurrentRoom.Type == RoomType.HczEzCheckpointA || p.CurrentRoom.Type == RoomType.HczEzCheckpointB).Count();
                     var inSurface = survivorsAndEscapees.Where(p => p.Zone == ZoneType.Surface).Count();
 
-                    if (inLcz == 0 && inHcz == 0 && survivorsAndEscapees.Count > 0)
-                    {
-                        if (!Warhead.IsInProgress)
-                        {
-                            Warhead.Start();
-                        }
-                    }
+                    if (Player.Get(p => p.Zone == ZoneType.LightContainment).Count() == 0) TryCloseDoorsInZone(ZoneType.HeavyContainment, ref ClosedHcz);
 
                 SCPHUD:
                     {
@@ -154,7 +153,7 @@ namespace CustomGameModes.GameModes
                         foreach (var scp in Infected)
                         {
                             scp.Broadcast(2, $"""
-                            Where to Find the {SurvivorRole}:
+                            Where to Find Your Targets ({SurvivorStr} and {EscapeeStr}):
                             {message}
                             """, shouldClearPrevious: true);
                         }
@@ -164,8 +163,8 @@ namespace CustomGameModes.GameModes
                     {
                         if (Escapees.Count > 0)
                         {
-                            var scpMsg = $"<color=red>{InfectedRole}</color>: {Infected.Count}";
-                            var cdMsg = $"<color=orange>{SurvivorRole}</color>: {Survivors.Count}";
+                            var scpMsg = $"{InfectedStr}: {Infected.Count}";
+                            var cdMsg = $"{SurvivorStr}: {Survivors.Count}";
                             foreach (var ci in Escapees)
                             {
                                 ci.Broadcast(2, $"{scpMsg} - {cdMsg}", shouldClearPrevious: true);
@@ -223,7 +222,6 @@ namespace CustomGameModes.GameModes
 
             Survivors.Add(player);
 
-
             Timing.CallDelayed(15, () => ShowSurvivorStartupMessage(player));
         }
 
@@ -251,20 +249,25 @@ namespace CustomGameModes.GameModes
         //-----------------------------------------------------------------------------------------------------------------------------------
         //-----------------------------------------------------------------------------------------------------------------------------------
 
+        public string EscapeeStr => $"<b><color=green>{EscapeeRole}</color></b>";
+        public string InfectedStr => $"<b><color=red>{InfectedRole}</color></b>";
+        public string SurvivorStr => $"<b><color=orange>{SurvivorRole}</color></b>";
+
         public void ShowEscapedMessage(Player scp)
         {
             scp.ShowHint($"""
-                A {SurvivorRole} has Escaped and returned as {EscapeeRole}!
+                A Survivor {SurvivorStr} has Escaped and returned as {EscapeeStr}!
                 Beware!
                 """, 20);
         }
 
         public void ShowSurvivorStartupMessage(Player classd)
         {
-            classd.ShowHint("""
+            classd.ShowHint($"""
+                Escape The Facility!
+                Avoid the Infected {InfectedStr}s!
                 No Picking up Items!
                 Tesla Gates are OFF!
-                <b>Just Run and Escape!</b>
                 """, 15);
         }
 
@@ -272,15 +275,15 @@ namespace CustomGameModes.GameModes
         {
             scp.ShowHint($"""
                 Tesla Gates are OFF!
-                Kill the <b><color=orange>{SurvivorRole}</color></b> Before They Escape!
+                Kill the Survivor {SurvivorStr}s Before They Escape!
                 """, 15);
         }
 
         public void ShowEscapeeMessage(Player esc)
         {
             esc.ShowHint($"""
-                Go Kill all the {InfectedRole}!
-                Beware, you can still become a {InfectedRole}!
+                Go Kill all the Infected {InfectedStr}s!
+                Beware, you can still become Infected!
 
 
 
@@ -300,14 +303,18 @@ namespace CustomGameModes.GameModes
 
         public void OnDoor(InteractingDoorEventArgs ev)
         {
+            if (ev.Door.IsGate)
+            {
+                return;
+            }
             if (ev.Door.IsOpen && !ev.Door.IsElevator && ev.Door.Type != DoorType.Airlock)
             {
                 // cannot close doors
                 DeniableEvent(ev);
             }
-            if (Survivors.Contains(ev.Player) && ev.Door.IsGate)
+            else if (ev.Door.Zone == ZoneType.HeavyContainment && ClosedHcz)
             {
-                ev.Door.IsOpen = true;
+                DeniableEvent(ev);
             }
         }
 
@@ -320,17 +327,6 @@ namespace CustomGameModes.GameModes
             {
                 DeniableEvent(ev);
             }
-        }
-
-        public void OnHurting(HurtingEventArgs ev)
-        {
-            if (Survivors.Contains(ev.Attacker))
-            {
-                ev.IsAllowed = false;
-                return;
-            }
-            ev.Player.HumeShield = 0;
-            ev.DamageHandler.Damage = ev.Player.MaxHealth / 5;
         }
 
         public void OnSearchingPickup(SearchingPickupEventArgs ev)
@@ -351,6 +347,17 @@ namespace CustomGameModes.GameModes
                     yield return Timing.WaitForSeconds(0.5f);
                     SetupInfected(ev.Player);
                     ev.Player.Teleport(ev.Attacker.Position);
+                }
+            }
+            else if (Infected.Contains(ev.Player))
+            {
+                Infected.Remove(ev.Player);
+                ev.Player.ClearInventory();
+
+                if (Escapees.Contains(ev.Attacker))
+                {
+                    yield return Timing.WaitForSeconds(5f);
+                    SetupEscapee(ev.Player);
                 }
             }
         }
@@ -378,6 +385,21 @@ namespace CustomGameModes.GameModes
 
                 if (AttachmentIdentifier.Get(weapon.FirearmType, InventorySystem.Items.Firearms.Attachments.AttachmentName.Flashlight) is AttachmentIdentifier att && att.Code != 0)
                     weapon.AddAttachment(att);
+            }
+        }
+
+        public void TryCloseDoorsInZone(ZoneType zone, ref bool hasClosed)
+        {
+            if (!hasClosed && !Player.List.Any(p => p.Zone == zone))
+            {
+                hasClosed = true;
+                foreach (Door door in Door.List)
+                {
+                    if (door.Zone == zone)
+                    {
+                        door.IsOpen = false;
+                    }
+                }
             }
         }
     }

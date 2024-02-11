@@ -27,6 +27,8 @@ namespace CustomGameModes.GameModes
     {
         public string Name => "DogHideAndSeek";
 
+        public string PreRoundInstructions => "";
+
         static int gamesPlayed = 0;
 
         Door beastDoor;
@@ -39,8 +41,8 @@ namespace CustomGameModes.GameModes
 
         CoroutineHandle roundHandlerCO;
 
-        int CountdownTime = 65;
-        int RoundTime = 10 * 60;
+        int CountdownTime = 35;
+        int BaseRoundTime = 5 * 60;
 
         bool FinalCountdown = false;
         bool FiveMinuteWarning = false;
@@ -239,6 +241,9 @@ namespace CustomGameModes.GameModes
         {
             // allow the Class-D to hurt/kill the beast after they win
             // disallow the beast to hurt the Class-D after it loses
+
+            if (ev.Player == ev.Attacker)
+                return;
 
             if (ev.Player.IsHuman == ev.Attacker?.IsHuman)
                 DeniableEvent(ev);
@@ -442,14 +447,11 @@ namespace CustomGameModes.GameModes
 
             Log.Debug("DHAS - starting escape timer");
 
-            Manager.RemovingTime += removeTime;
-            Manager.PlayerDied += onPlayerRoleDied;
-            Manager.PlayerCompleteAllTasks += onPlayerCompleteAllTasks;
             while (elapsedTime() < timerTotalSeconds)
             {
                 teleportPlayersOutOfHcz();
                 var t = timerTotalSeconds - elapsedTime();
-                if (!ReleaseOneMinuteWarning && t <= 60)
+                if (!ReleaseOneMinuteWarning && t <= 30)
                 {
                     ReleaseOneMinuteWarning = true;
                     var (cassie, _) = beastName();
@@ -471,14 +473,25 @@ namespace CustomGameModes.GameModes
 
             Log.Debug("DHAS - starting main timer");
             Manager.BeastReleased = true;
-            timerTotalSeconds = RoundTime;
+            timerTotalSeconds = BaseRoundTime + Manager.TotalTimeRemovedByTasks();
             timerStartedTime = DateTime.Now;
             getBroadcast = (p) => p.MainGameBroadcast;
+
+            Manager.RemovingTime += removeTime;
+            Manager.PlayerDied += onPlayerRoleDied;
+            Manager.PlayerCompleteAllTasks += onPlayerCompleteAllTasks;
 
             removeTime(0);
 
             void ActivateBeastSickoMode()
             {
+                if (Manager.BeastSickoModeActivate == true)
+                    return;
+
+                var t = timerTotalSeconds - elapsedTime();
+                if (t > 65)
+                    removeTime(t - 61);
+
                 Manager.BeastSickoModeActivate = true;
                 foreach (var room in Room.Get(ZoneType.LightContainment))
                 {
@@ -494,9 +507,9 @@ namespace CustomGameModes.GameModes
                 teleportPlayersOutOfHcz();
                 var t = timerTotalSeconds - elapsedTime();
 
-                if (Manager.Humans().Count == 1 && t > 65)
+                if (Manager.Humans().Count == 1 && Manager.Spectators().Count > 0)
                 {
-                    removeTime(t - 61);
+                    ActivateBeastSickoMode();
                 }
 
                 if (!FiveMinuteWarning && t <= 300 && t % 30 == 0)
@@ -535,6 +548,7 @@ namespace CustomGameModes.GameModes
                 room.Color = Color.white;
             }
 
+            Cassie.Clear();
             Cassie.GlitchyMessage("Game Over", 0.5f, 0f);
 
             var stillAlive = Manager.Humans().Count;
@@ -547,8 +561,6 @@ namespace CustomGameModes.GameModes
 
             foreach (var classD in Manager.Humans())
             {
-                var item = classD.player.AddItem(ItemType.MicroHID);
-                classD.player.CurrentItem = item;
                 classD.player.Health = 9999;
             }
 
@@ -557,7 +569,7 @@ namespace CustomGameModes.GameModes
 
         #endregion
 
-        private void onPlayerRoleDied(Player ev)
+        void onPlayerRoleDied(Player ev)
         {
             if (Manager.PlayerRoles[ev] is BeastRole) { return; }
 
@@ -570,7 +582,7 @@ namespace CustomGameModes.GameModes
 
                 Cassie.Clear();
                 var alive = Manager.Humans().Count;
-                Cassie.DelayedMessage($"{alive} personnel remain", 1f, isNoisy: false);
+                Cassie.DelayedMessage($"{alive} personnel are alive", 1f, isNoisy: false);
             });
         }
 

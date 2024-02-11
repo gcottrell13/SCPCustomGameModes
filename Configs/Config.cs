@@ -23,6 +23,9 @@ namespace CustomGameModes.Configs
             "n",
         };
 
+        [Description("In Normal, % chance of resurrecting a SCP-049-2 to look like SCP-3114 instead of the normal zombie")]
+        public int Scp3114ZombieChance { get; set; } = 25;
+
         [Description("In Normal, % chance of upgrading player with SCP 5000")]
         public int Scp5000Chance { get; set; } = 5;
 
@@ -49,5 +52,8 @@ namespace CustomGameModes.Configs
         {
             { nameof(RoleTypeId.ChaosConscript), 100f },
         };
+
+        [Description("pregame round instruction size")]
+        public int PregameRoundInstructionSize { get; set; } = 15;
     }
 }

@@ -7,6 +7,7 @@ using PlayerRoles;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -126,6 +127,17 @@ namespace CustomGameModes.GameModes
                 role.Start();
             }
         }
+
+        public int TotalTimeRemovedByTasks()
+        {
+            int total = 0;
+            foreach (DhasRole role in ActiveRoles)
+            {
+                total += role.Tasks.Sum(task => task.GetMethodInfo().GetCustomAttribute<CrewmateTaskAttribute>()?.Difficulty.DifficultyTime() ?? 0);
+            }
+            return total;
+        }
+
 
         public List<DhasRole> Spectators() => ActiveRoles.Where(x => x.player.IsDead).ToList();
 

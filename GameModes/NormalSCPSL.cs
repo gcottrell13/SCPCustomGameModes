@@ -1,26 +1,17 @@
-﻿using Exiled.Events.EventArgs.Server;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using PlayerEvent = Exiled.Events.Handlers.Player;
-using MapEvent = Exiled.Events.Handlers.Map;
-using Scp914Event = Exiled.Events.Handlers.Scp914;
-using ServerEvent = Exiled.Events.Handlers.Server;
-using Exiled.Events.EventArgs.Player;
-using Exiled.API.Features;
-using MEC;
-using PlayerRoles;
-using Exiled.Events.EventArgs.Scp914;
-using Exiled.API.Extensions;
+﻿using PlayerEvent = Exiled.Events.Handlers.Player;
 using CustomGameModes.GameModes.Normal;
+using Exiled.Events.EventArgs.Player;
+using PlayerRoles;
+using Exiled.API.Extensions;
+using MEC;
 
 namespace CustomGameModes.GameModes
 {
     internal class NormalSCPSL : IGameMode
     {
         public string Name => "Normal";
+
+        public string PreRoundInstructions => "";
 
         SCP5000Handler SCP5000Handler { get; set; }
         ClassDStarterInventory ClassDStarterInventory { get; set; }
@@ -59,12 +50,28 @@ namespace CustomGameModes.GameModes
             SCP5000Handler.SubscribeEventHandlers();
             ClassDStarterInventory.SubscribeEventHandlers();
             CellGuard.SubscribeEventHandlers();
+            new SkeletonSpawner().SubscribeEventHandlers();
+
+            PlayerEvent.Spawned += OnSpawn;
         }
         void UnsubscribeEventHandlers()
         {
             SCP5000Handler.UnsubscribeEventHandlers();
             ClassDStarterInventory.UnsubscribeEventHandlers();
             CellGuard.UnsubscribeEventHandlers();
+
+            PlayerEvent.Spawned -= OnSpawn;
+        }
+
+        void OnSpawn(SpawnedEventArgs ev)
+        {
+            if (ev.Player.Role == RoleTypeId.Scp0492)
+            {
+                if (UnityEngine.Random.Range(1, 101) < CustomGameModes.Singleton.Config.Scp3114ZombieChance)
+                {
+                    Timing.CallDelayed(0.1f, () => ev.Player.ChangeAppearance(RoleTypeId.Scp3114));
+                }
+            }
         }
     }
 }
