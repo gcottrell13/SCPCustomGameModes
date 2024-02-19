@@ -90,6 +90,7 @@ namespace CustomGameModes
         private void OnRoundEnded(RoundEndedEventArgs @event)
         {
             SCP5000Handler.UnsubscribeAll();
+            SCP1392Handler.UnsubscribeAll();
             CurrentGame?.OnRoundEnd();
             foreach (var player in Player.List)
             {

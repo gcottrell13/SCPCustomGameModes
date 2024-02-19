@@ -24,7 +24,7 @@ namespace CustomGameModes.GameModes
 
         private List<Door> ClassDDoorsTouched = new();
 
-        private int GhostlightsThrown = 0;
+        private HashSet<Room> GhostlightsThrown = new();
 
         public override RoleTypeId RoleType => RoleTypeId.ClassD;
 
@@ -79,7 +79,7 @@ namespace CustomGameModes.GameModes
                     return;
                 }
 
-                GhostlightsThrown++;
+                GhostlightsThrown.Add(player.CurrentRoom);
                 if (!givingGhostlight)
                 {
                     givingGhostlight = true;
@@ -149,10 +149,10 @@ namespace CustomGameModes.GameModes
             PlayerEvent.UsedItem += ghostlightUse;
             PlayerEvent.ThrownProjectile += ghostlightUse;
 
-            while (GhostlightsThrown < requiredRoomCount)
+            while (GhostlightsThrown.Count < requiredRoomCount)
             {
-                var diff = requiredRoomCount - GhostlightsThrown;
-                var more = GhostlightsThrown == 0 ? "" : " more";
+                var diff = requiredRoomCount - GhostlightsThrown.Count;
+                var more = GhostlightsThrown.Count == 0 ? "" : " more";
                 FormatTask($"Throw scp2176 {strong(diff)}{more} times", "");
                 yield return Timing.WaitForSeconds(1);
             }
