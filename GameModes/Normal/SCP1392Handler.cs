@@ -112,6 +112,9 @@ namespace CustomGameModes.GameModes.Normal
             if (DateTime.Now - lastLethalEvent > TimeSpan.FromSeconds(10))
             {
                 ev.IsAllowed = false;
+                ev.Player.PlayBeepSound();
+                ev.Player.ArtificialHealth = 100;
+                ev.Player.Health = 1;
                 lastLethalEvent = DateTime.Now;
             }
             else
@@ -129,8 +132,8 @@ namespace CustomGameModes.GameModes.Normal
         private IEnumerator<float> Hurt(HurtEventArgs ev)
         {
             if (!CheckOwner(ev.Player)) yield break;
-            yield return Timing.WaitForSeconds(2);
-            Owner.Heal(20);
+            yield return Timing.WaitForSeconds(3);
+            Owner.Heal(ev.Amount * 0.5f);
         }
     }
 }

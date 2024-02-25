@@ -33,7 +33,9 @@ namespace CustomGameModes.Commands
             foreach (var hub in target)
             {
                 var player = Player.Get(hub);
-                new SCP5000Handler().SetupScp5000(player);
+                var scp = new SCP5000Handler();
+                scp.SetupScp5000(player);
+                scp.PlayIntroCassie();
             }
             response = $"Gave SCP 5000 to {target.Count} players.";
             return true;

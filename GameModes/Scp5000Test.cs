@@ -6,11 +6,14 @@ using System.Collections.Generic;
 using System.Linq;
 using ServerEvent = Exiled.Events.Handlers.Server;
 using PlayerEvent = Exiled.Events.Handlers.Player;
+using Scp079Event = Exiled.Events.Handlers.Scp079;
 using PlayerRoles.RoleAssign;
 using Exiled.Events.EventArgs.Server;
 using MEC;
 using Exiled.API.Features.Doors;
 using CustomGameModes.API;
+using Exiled.Events.EventArgs.Scp079;
+using Exiled.API.Extensions;
 
 namespace CustomGameModes.GameModes
 {
@@ -41,6 +44,8 @@ namespace CustomGameModes.GameModes
         {
             PlayerEvent.Hurting -= OnHurting;
             PlayerEvent.Shooting -= Shooting;
+            Scp079Event.Pinging -= Pinging;
+
             ServerEvent.RespawningTeam -= RespawningTeam;
             ServerEvent.SelectingRespawnTeam -= SelectingRespawnTeam;
         }
@@ -49,6 +54,7 @@ namespace CustomGameModes.GameModes
         {
             PlayerEvent.Hurting += OnHurting;
             PlayerEvent.Shooting += Shooting;
+            Scp079Event.Pinging += Pinging;
 
             ServerEvent.RespawningTeam += RespawningTeam;
             ServerEvent.SelectingRespawnTeam += SelectingRespawnTeam;
@@ -73,6 +79,14 @@ namespace CustomGameModes.GameModes
         {
             foreach (var player in Player.List)
             {
+
+                if (player.Role.Team == Team.SCPs && player.Role != RoleTypeId.Scp079)
+                    // SCPs can stay as they are, unless they are SCP 079.
+                    // if one of the non-079 SCPs get chosen as a volunteer, and in doing so leave 079 alone (even just for a microsecond)
+                    // the game will activate the overcharge and kill 079.
+                    // So to safely avoid this situation, we remove all 079s while not removing any other SCPs, thus ensuring that a 079 is never alone.
+                    // After volunteers are chosen, the game may choose to spawn 079 again.
+                    continue;
                 player.ClearInventory();
                 player.Role.Set(RoleTypeId.Spectator);
             }
@@ -82,26 +96,28 @@ namespace CustomGameModes.GameModes
             var volunteerPool = ItemPool.ToPool(Volunteers);
             var count = (Player.List.Count / 10) + 1;
 
-            for (int i = 0; i <= Player.List.Count / 10; i++)
+            for (int i = 0; i < count; i++)
             {
                 if (volunteerPool.Count > 0)
                 {
                     var volunteer = volunteerPool.GetNext(p => !DoomSlayers.Contains(p));
-                    volunteer.Role.Set(RoleTypeId.NtfCaptain);
-                    DoomSlayers.Add(volunteer);
-                    volunteerPool.Remove(volunteer);
+                    if (volunteer != null)
+                    {
+                        volunteer.Role.Set(RoleTypeId.NtfCaptain);
+                        DoomSlayers.Add(volunteer);
+                        volunteerPool.Remove(volunteer);
+                        continue;
+                    }
                 }
-                else
-                {
-                    HumanSpawner.SpawnHumans(new[] { Team.FoundationForces }, 1);
-                }
+
+                HumanSpawner.SpawnHumans(new[] { Team.FoundationForces }, 1);
             }
 
-            ScpSpawner.SpawnScps(Player.List.Count - count);
+            var spectatorCount = Player.Get(RoleTypeId.Spectator).Count();
+            ScpSpawner.SpawnScps(spectatorCount);
 
             foreach (var human in Player.Get(Team.FoundationForces))
             {
-                human.AddItem(ItemType.KeycardO5);
                 human.EnableEffect(Exiled.API.Enums.EffectType.MovementBoost, 25, 9999f);
             }
         }
@@ -149,6 +165,22 @@ namespace CustomGameModes.GameModes
         private void SelectingRespawnTeam(SelectingRespawnTeamEventArgs ev)
         {
             ev.Team = Respawning.SpawnableTeamType.NineTailedFox;
+        }
+
+        private void Pinging(PingingEventArgs ev)
+        {
+            if (ev.Type != Exiled.API.Enums.PingType.Human) return;
+
+            var costToRevealInvisible = ev.Scp079.MaxEnergy / 2;
+            foreach (Player targetHuman in Player.Get(x => x.IsHuman))
+            {
+                if ((targetHuman.Position - ev.Position).magnitude < 4f && ev.Scp079.Energy >= costToRevealInvisible)
+                {
+                    targetHuman.DisableEffect(Exiled.API.Enums.EffectType.Invisible);
+                    targetHuman.PlayBeepSound();
+                    ev.AuxiliaryPowerCost = costToRevealInvisible;
+                }
+            }
         }
     }
 }

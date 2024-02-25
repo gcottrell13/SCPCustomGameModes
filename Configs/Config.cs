@@ -29,6 +29,9 @@ namespace CustomGameModes.Configs
         [Description("In Normal, % chance of upgrading player with SCP 5000")]
         public int Scp5000Chance { get; set; } = 5;
 
+        [Description("If set, play this CASSIE message to the recipient of SCP 5000")]
+        public string Scp5000CassieIntro { get; set; } = "pitch_1.50 welcome new user to s c p 5 thousand . others cannot see you until you .G7";
+
         [Description("In DogHideAndSeek, chances of the SCP getting a particular role. Does not have to add up to 100%")]
         public Dictionary<string, float> DhasScpChance { get; set; } = new()
         {

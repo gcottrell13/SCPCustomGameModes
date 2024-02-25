@@ -183,6 +183,7 @@ namespace CustomGameModes.GameModes.Normal
                 ) && UnityEngine.Random.Range(1, 100) <= Scp5000Chance)
             {
                 SetupScp5000(ev.Player);
+                PlayIntroCassie();
                 ev.Player.Position = ev.OutputPosition;
                 ev.IsAllowed = false;
             }
@@ -255,6 +256,14 @@ namespace CustomGameModes.GameModes.Normal
             SubscribeOnPlayerGive();
             ensureScp5000Thread();
             Log.Info($"Gave SCP 5000 to player {Scp5000Owner.NetId} - {Scp5000Owner.Nickname}");
+        }
+
+        public void PlayIntroCassie()
+        {
+            if (Scp5000Owner == null) return;
+
+            Scp5000Owner.PlayCassieAnnouncement(CustomGameModes.Singleton.Config.Scp5000CassieIntro, makeNoise: false);
+            Scp5000Owner.ShowHint("WELCOME NEW USER to SCP-5000.\nOthers cannot see you until you make noise", 7);
         }
 
         bool WasRecentlyNoisy => (DateTime.Now - LastNoisyAction).TotalSeconds < 4;
