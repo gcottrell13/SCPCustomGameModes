@@ -60,12 +60,14 @@ namespace CustomGameModes.API
         public T GetNext(Func<T, bool> predicate)
         {
             int startIndex = index;
-            while (true)
+            var c = Values.Count * 2;
+            while (c-- > 0)
             {
                 T next = GetNext();
                 if (predicate(next)) return next;
                 if (index == startIndex) return default;
             }
+            return default;
         }
 
         public bool Remove(T value) => Values.Remove(value);
