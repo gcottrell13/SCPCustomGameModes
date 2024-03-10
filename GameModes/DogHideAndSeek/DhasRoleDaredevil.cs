@@ -34,7 +34,7 @@ namespace CustomGameModes.GameModes
         {
             ThrowGhostlights,
             TouchAllClassDDoors,
-            NoFlashlight,
+            FindAPlayer,
             BeNearBeast,
         };
 
@@ -112,34 +112,6 @@ namespace CustomGameModes.GameModes
             }
         }
 
-        [CrewmateTask(TaskDifficulty.Medium)]
-        private IEnumerator<float> NoFlashlight()
-        {
-            var mustRunSeconds = 30f;
-            var timeElapsed = 0f;
-
-            void hint()
-            {
-                if (timeElapsed == 0f)
-                    FormatTask($"Flashlight off for\n{mustRunSeconds} seconds", "");
-                else
-                    FormatTask($"Flashlight off for an additional\n{mustRunSeconds - timeElapsed} seconds", "");
-            }
-
-            bool predicate()
-            {
-                // if they aren't holding a flashlight (null), or it's turned off (false) then that's what we want
-                return (player.CurrentItem as Flashlight)?.IsEmittingLight != true;
-            }
-
-            while (timeElapsed < mustRunSeconds)
-            {
-                if (predicate()) timeElapsed += 0.5f;
-                hint();
-                yield return Timing.WaitForSeconds(0.5f);
-            }
-        }
-
         [CrewmateTask(TaskDifficulty.Easy)]
         private IEnumerator<float> ThrowGhostlights()
         {
@@ -153,7 +125,7 @@ namespace CustomGameModes.GameModes
             {
                 var diff = requiredRoomCount - GhostlightsThrown.Count;
                 var more = GhostlightsThrown.Count == 0 ? "" : " more";
-                FormatTask($"Throw scp2176 {strong(diff)}{more} times", "");
+                FormatTask($"Throw scp2176 from {strong(diff)}{more} unique rooms", "");
                 yield return Timing.WaitForSeconds(1);
             }
 

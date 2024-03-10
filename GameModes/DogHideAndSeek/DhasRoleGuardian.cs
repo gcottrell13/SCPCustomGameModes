@@ -26,7 +26,7 @@ namespace CustomGameModes.GameModes
         {
             GetAKeycard,
             UpgradeKeycard,
-            EscapeToHcz,
+            ToArmory,
             ProtectTeammates,
         };
 
@@ -70,7 +70,7 @@ namespace CustomGameModes.GameModes
 
 
         [CrewmateTask(TaskDifficulty.Medium)]
-        private IEnumerator<float> EscapeToHcz()
+        private IEnumerator<float> ToArmory()
         {
             Room armory = Room.Get(RoomType.LczArmory);
             Door insideDoor = armory.Doors.FirstOrDefault(d => d.Rooms.Count == 1);
@@ -99,7 +99,7 @@ namespace CustomGameModes.GameModes
                 yield break;
             }
 
-            yield return WaitHint("Go Back and Protect your Teammates!", 10f);
+            yield return WaitHint("Get a Better Gun and Go Protect your Teammates!", 10f);
 
             var message = "Protect your Teammates";
             var teleports = "";
@@ -148,15 +148,13 @@ namespace CustomGameModes.GameModes
             }
         }
 
-        private const FirearmType gun = FirearmType.E11SR;
-        private AttachmentIdentifier flashlightAttachment = AttachmentIdentifier.Get(gun, InventorySystem.Items.Firearms.Attachments.AttachmentName.Flashlight);
-
         private void equipGuardian()
         {
             player.Health = 100;
             player.ArtificialHealth = 50;
             player.AddAmmo(AmmoType.Nato556, 50);
-            player.CurrentItem = EnsureFirearm(gun, flashlightAttachment);
+            player.AddAmmo(AmmoType.Ammo12Gauge, 50);
+            player.AddAmmo(AmmoType.Ammo44Cal, 50);
             EnsureItem(ItemType.Flashlight);
             EnsureItem(ItemType.ArmorCombat);
             EnsureItem(ItemType.KeycardO5);
@@ -182,7 +180,7 @@ namespace CustomGameModes.GameModes
             }
             else
             {
-                player.Position = RoleTypeId.Scientist.GetRandomSpawnLocation().Position + UnityEngine.Vector3.up;
+                player.Position = RoleTypeId.Scientist.GetRandomSpawnLocation().Position + Vector3.up;
             }
         }
 

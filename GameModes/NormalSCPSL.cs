@@ -51,6 +51,7 @@ namespace CustomGameModes.GameModes
             ClassDStarterInventory.SubscribeEventHandlers();
             CellGuard.SubscribeEventHandlers();
             new SkeletonSpawner().SubscribeEventHandlers();
+            new DChildren().Setup();
 
             PlayerEvent.Spawned += OnSpawn;
         }

@@ -1,20 +1,16 @@
 ﻿using Exiled.API.Enums;
+using Exiled.API.Extensions;
 using Exiled.API.Features;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
 using Exiled.API.Structs;
-using Exiled.Events.EventArgs.Player;
-using Exiled.Events.Features;
 using MEC;
 using PlayerRoles;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace CustomGameModes.GameModes
@@ -30,18 +26,18 @@ namespace CustomGameModes.GameModes
 
         #region Running State
 
-        public Player AlreadyAcceptedCooperativeTasks;
+        public Player? AlreadyAcceptedCooperativeTasks;
 
         private CoroutineHandle _runningCoroutine;
 
-        public Pickup MyTargetPickup { get; private set; }
+        public Pickup? MyTargetPickup { get; private set; }
 
         private List<dhasTask> runningTaskList;
 
         public string CurrentTaskHint { get; private set; } = "";
 
         public int CurrentTaskNum { get; private set; }
-        public dhasTask CurrentTask { get
+        public dhasTask? CurrentTask { get
             {
                 try
                 {
@@ -128,6 +124,7 @@ namespace CustomGameModes.GameModes
                     catch (Exception e)
                     {
                         Log.Error(e);
+                        break;
                     }
                     if (player.Role.Type == RoleTypeId.Spectator && RoleType != RoleTypeId.Spectator)
                     {
@@ -201,7 +198,7 @@ namespace CustomGameModes.GameModes
 
         #region Pickups
 
-        private Pickup _claimNearestPickup(Func<Pickup, bool> predicate)
+        private Pickup? _claimNearestPickup(Func<Pickup, bool> predicate)
         {
             var inZone = Pickup.List.Where(
                 p => p.Room?.Zone == player.CurrentRoom?.Zone
@@ -285,18 +282,19 @@ namespace CustomGameModes.GameModes
             .Select(r => r.player)
             .ToList();
 
-        public Player Beast => Manager.Beast().FirstOrDefault()?.player;
+        public Player? Beast => Manager.Beast().FirstOrDefault()?.player;
 
-        protected Player GetFarthestCrewmate()
+        protected Player? GetFarthestCrewmate()
         {
             var farthestPlayer = OtherCrewmates
                     .OrderByDescending(p => (p.Position - player.Position).magnitude)
                     .FirstOrDefault();
-            if (farthestPlayer == null || farthestPlayer == player) return null;
+            if (farthestPlayer == null || farthestPlayer == player) 
+                return null;
             return farthestPlayer;
         }
 
-        public Player GetNearestCrewmate(Func<Player, bool> filter = null)
+        public Player? GetNearestCrewmate(Func<Player, bool>? filter = null)
         {
             var nearestTeammate = OtherCrewmates
                     .Where(p => filter?.Invoke(p) ?? true)
@@ -306,22 +304,30 @@ namespace CustomGameModes.GameModes
             return nearestTeammate;
         }
 
-        public float DistanceTo(Player p) => (p.Position - player.Position).magnitude;
+        public float DistanceTo(Player? p) => p == null ? float.PositiveInfinity : (p.Position - player.Position).magnitude;
         public float DistanceTo(Vector3 vec) => (player.Position - vec).magnitude;
 
-        public bool IsNear(Player p, int distance, out string display)
+        public bool IsNear(Player? p, int distance, out string display)
         {
-            if (p != null && DistanceTo(p) < distance)
-            {
-                display = strong($"<color=green>{distance}m</color>");
-                return true;
-            }
+            if (p != null) {
+                Vector3 pos = p.Position;
+                if (p.IsDead)
+                {
+                    pos = Ragdoll.Get(p).First().Position;
+                }
+
+                if (DistanceTo(pos) < distance)
+                {
+                    display = strong($"<color=green>{distance}m</color>");
+                    return true;
+                }
+            } 
 
             display = $"{distance}m";
             return false;
         }
 
-        public bool IsNear(Player p, int distance) => IsNear(p, distance, out var _);
+        public bool IsNear(Player? p, int distance) => IsNear(p, distance, out var _);
 
         #endregion
 
@@ -345,7 +351,7 @@ namespace CustomGameModes.GameModes
             return "";
         }
 
-        public string CompassToPlayer(Player p)
+        public string CompassToPlayer(Player? p)
         {
             if (p == null)
                 return "";
@@ -359,9 +365,13 @@ namespace CustomGameModes.GameModes
                 };
 
                 return $"""
-                    This player is in {p.Zone} at {p.CurrentRoom.Type}:
+                    This player is in {p.Zone}, in {p.CurrentRoom?.Type ?? RoomType.Unknown} room:
                     {compass}
                     """;
+            }
+            else if (p.IsDead)
+            {
+                return GetCompass(Ragdoll.Get(p).First().Position);
             }
             else
             {
@@ -412,9 +422,10 @@ namespace CustomGameModes.GameModes
             return compass;
         }
 
-        protected string HotAndCold(Vector3 to)
+        protected string HotAndCold(Vector3? to)
         {
-            var distance = (int)DistanceTo(to);
+            if (to == null) return "";
+            var distance = (int)DistanceTo(to.Value);
             var size = distance switch
             {
                 < 1 => 500,
@@ -532,6 +543,7 @@ namespace CustomGameModes.GameModes
             if ((player.Position - p.Position).magnitude < requiredFriendDistance)
                 friendCompletedTask = true;
         }
+
         [CrewmateTask(TaskDifficulty.Medium)]
         protected IEnumerator<float> BeNearWhenTaskComplete()
         {
@@ -554,19 +566,49 @@ namespace CustomGameModes.GameModes
             Manager.PlayerCompleteOneTask -= OnSomeoneCompleteTask;
         }
 
+
+        public HashSet<Player> PlayersFound = new();
+        [CrewmateTask(TaskDifficulty.Medium)]
+        public IEnumerator<float> FindAPlayer()
+        {
+            var requiredDistance = 5;
+            var targetPlayer = OtherCrewmates.Where(x => !IsNear(x, requiredFriendDistance) && !PlayersFound.Contains(x)).GetRandomValue();
+
+            if (targetPlayer == null)
+                targetPlayer = Player.List.Where(x => x != player && x.Role.Team != Team.SCPs).GetRandomValue();
+
+            if (targetPlayer != null)
+            {
+                PlayersFound.Add(targetPlayer);
+                while (!IsNear(targetPlayer, requiredDistance, out var dist))
+                {
+                    var compass = CompassToPlayer(targetPlayer);
+                    FormatTask($"Be Within {dist} of {PlayerNameFmt(targetPlayer)}", compass);
+                    yield return Timing.WaitForSeconds(0.5f);
+                }
+            }
+            else
+            {
+                throw new Exception("nobody found");
+            }
+        }
+
         #endregion
 
         public string TaskSuccessMessage => strong("<size=40><color=green>Task Complete!</color></size>");
 
-        public string PlayerNameFmt(Player player)
+        public string PlayerNameFmt(Player? player)
         {
-            var color = player.Role.Type switch
+            if (player == null) return "";
+
+            RoleTypeId role = player.IsDead ? Ragdoll.Get(player).FirstOrDefault()?.Role ?? RoleTypeId.None : player.Role;
+            var color = RoleExtensions.GetTeam(role) switch
             {
-                RoleTypeId.Scientist => "yellow",
-                RoleTypeId.ClassD => "orange",
-                RoleTypeId.NtfCaptain => "blue",
-                RoleTypeId.Spectator => "white",
-                _ => "red",
+                Team.Scientists => "yellow",
+                Team.ClassD => "orange",
+                Team.FoundationForces => "blue",
+                Team.SCPs => "red",
+                _ => "white",
             };
             return strong($"<color={color}>{player.DisplayNickname}</color>");
         }

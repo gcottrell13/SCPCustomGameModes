@@ -2,19 +2,12 @@
 using Exiled.API.Enums;
 using Exiled.API.Extensions;
 using Exiled.API.Features;
-using Exiled.API.Features.Doors;
-using Exiled.API.Features.Items;
 using Exiled.API.Features.Pickups;
 using Exiled.API.Features.Toys;
 using Exiled.Events.EventArgs.Player;
 using MEC;
 using PlayerRoles;
-using PlayerRoles.PlayableScps.Scp939.Ripples;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using PlayerEvent = Exiled.Events.Handlers.Player;
 
@@ -26,10 +19,10 @@ namespace CustomGameModes.GameModes
 
         public override RoleTypeId RoleType => RoleTypeId.ClassD;
 
-        private Player Friend;
-        private DhasRole FriendRole;
-        private Primitive Step;
-        private Primitive Cube;
+        private Player? Friend;
+        private DhasRole? FriendRole;
+        private Primitive? Step;
+        private Primitive? Cube;
         private bool closeEncounterNearCube = false;
         bool worthIt = false;
         bool doorOpened = false;
@@ -68,8 +61,6 @@ namespace CustomGameModes.GameModes
             Friend = OtherCrewmates.Pool(teammate =>
             {
                 var friendrole = Manager.PlayerRoles[teammate];
-                //if (!friendrole.TryGiveCooperativeTasks(player, 1, GetRandomKeycard))
-                //    return false;
                 if (!friendrole.TryGiveCooperativeTasks(player, 4, FindMadman))
                     return false;
                 Log.Debug($"Gave 1 task(s) to friend {teammate.DisplayNickname}");
@@ -80,10 +71,10 @@ namespace CustomGameModes.GameModes
             {
                 if (searchedForFriendTimes > 10)
                 {
-                    var item = EnsureItem(ItemType.KeycardMTFPrivate);
+                    var item = EnsureItem(friendPickupType);
                     yield return WaitHint($"""
                         You don't have any friends. =( 
-                        A consolation keycard has been added to your inventory.
+                        A consolation {friendPickupType} has been added to your inventory.
                         """, 10);
                     goto End;
                 }
@@ -100,6 +91,8 @@ namespace CustomGameModes.GameModes
             {
                 if (Friend.IsDead) goto FriendDead;
 
+                tryTransmuteTeammates();
+
                 var compass = HotAndCold(Friend.Position);
                 FormatTask($"Go get a {friendPickupType} from {PlayerNameFmt(Friend)}.", compass);
                 yield return Timing.WaitForSeconds(0.5f);
@@ -107,6 +100,7 @@ namespace CustomGameModes.GameModes
 
             while (NotHasItem(keycardFriendPickup.Type, out var item))
             {
+                tryTransmuteTeammates();
                 var compass = GetCompass(keycardFriendPickup.Position);
                 FormatTask($"Get the {friendPickupType} that {PlayerNameFmt(Friend)} dropped for you.", compass);
                 yield return Timing.WaitForSeconds(0.5f);
@@ -138,6 +132,7 @@ namespace CustomGameModes.GameModes
             while (!doorOpened && DistanceTo(Cube.Position) > 7)
             {
                 var compass = GetCompass(CUBE.Position);
+                tryTransmuteTeammates();
                 FormatTask("Go to THE CUBE in PT-00", compass);
                 yield return Timing.WaitForSeconds(0.5f);
             }
@@ -179,10 +174,14 @@ namespace CustomGameModes.GameModes
                 return in173 && aboveCube;
             }
 
+            if (Cube == null || Step == null)
+                yield break;
+
             Cube.Position = new(Cube.Position.x, 12f, Cube.Position.z);
 
             while (timeElapsed < mustRunSeconds)
             {
+                tryTransmuteTeammates();
                 if (onCube())
                 {
                     timeElapsed += 1;
@@ -230,6 +229,7 @@ namespace CustomGameModes.GameModes
 
             while (!worthIt)
             {
+                tryTransmuteTeammates();
                 FormatTask($"""
                     {strong(thingToDieFor)}
                     (get killed by The Beast)
@@ -242,6 +242,21 @@ namespace CustomGameModes.GameModes
 
             ShowTaskCompleteMessage(30);
             yield return Timing.WaitForSeconds(30);
+        }
+
+        HashSet<Player> teammatesTransmuted = new HashSet<Player>();
+        private void tryTransmuteTeammates()
+        {
+            if (Manager?.BeastReleased != true) return;
+            var beastRole = Beast?.Role.Type ?? RoleTypeId.Scp939;
+            foreach (var teammate in OtherCrewmates)
+            {
+                if (teammatesTransmuted.Contains(teammate)) continue;
+                if (DistanceTo(teammate) < 30) continue;
+                if (teammate == Friend) continue;
+                teammate.ChangeAppearance(beastRole, new[] { player });
+                teammatesTransmuted.Add(teammate);
+            }
         }
 
         #region Event Handlers
@@ -258,14 +273,14 @@ namespace CustomGameModes.GameModes
         {
             if (ev.Door == Lcz173Room.gate
                 && ev.Player == player
-                && ev.Player.CurrentItem?.Type == keycardFriendPickup.Type)
+                && ev.Player.CurrentItem?.Type == keycardFriendPickup?.Type)
             {
                 doorOpened = true;
                 ev.Door.IsOpen = true;
             }
         }
 
-        Pickup keycardFriendPickup;
+        Pickup? keycardFriendPickup;
         void OnDroppedItem(DroppedItemEventArgs ev)
         {
             if (keycardFriendPickup == null && ev.Player == Friend && ev.Pickup.Type == friendPickupType)

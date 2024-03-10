@@ -1,4 +1,4 @@
-﻿using CustomGameModes.API;
+using CustomGameModes.API;
 using Exiled.API.Enums;
 using Exiled.API.Extensions;
 using Exiled.API.Features;
@@ -31,10 +31,10 @@ namespace CustomGameModes.GameModes
 
         static int gamesPlayed = 0;
 
-        Door beastDoor;
+        Door? beastDoor;
         bool DidTimeRunOut = false;
         List<Door> LCZDoors = new();
-        public static DhasRoleManager Manager;
+        public static DhasRoleManager? Manager;
         bool cassieBeastEscaped = false;
 
         HashSet<Door> DoorsReopenAfterClosing = new();
@@ -141,6 +141,8 @@ namespace CustomGameModes.GameModes
 
         private void OnEndingRound(EndingRoundEventArgs ev)
         {
+            if (Round.IsLocked) return;
+
             if (DidTimeRunOut || Manager?.Beast().Count == 0)
             {
                 ev.LeadingTeam = LeadingTeam.FacilityForces;
@@ -571,6 +573,7 @@ namespace CustomGameModes.GameModes
 
         void onPlayerRoleDied(Player ev)
         {
+            if (Manager == null) return;
             if (Manager.PlayerRoles[ev] is BeastRole) { return; }
 
             var specRole = Manager.ApplyRoleToPlayer(ev, SpectatorRole.name);

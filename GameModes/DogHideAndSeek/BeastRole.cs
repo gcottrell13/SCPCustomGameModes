@@ -71,9 +71,9 @@ namespace CustomGameModes.GameModes
             {
                 player.ShowHint("Break Free", 7);
             }
-            else
+            else if (player.CurrentRoom != null)
             {
-                foreach (Door door in player.CurrentRoom?.Doors)
+                foreach (Door door in player.CurrentRoom.Doors)
                 {
                     door.IsOpen = true;
                 }
@@ -87,12 +87,19 @@ namespace CustomGameModes.GameModes
             }
 
         SickoMode:
+            var humanCount = Manager.Humans().Count;
             while (Manager.BeastSickoModeActivate)
             {
-                if (Manager.Humans().Count > 0)
+                var nearest = GetNearestCrewmate();
+                var compass = humanCount switch
                 {
-                    var c = GetNearestCrewmate();
-                    FormatTask($"Kill {PlayerNameFmt(c)}", HotAndCold(c.Position));
+                    1 => HotAndCold(nearest?.Position),
+                    _ => CompassToPlayer(nearest),
+                };
+
+                if (nearest != null)
+                {
+                    FormatTask($"Kill {PlayerNameFmt(nearest)}", compass);
                 }
 
                 yield return Timing.WaitForSeconds(0.5f);

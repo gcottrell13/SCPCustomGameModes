@@ -58,5 +58,8 @@ namespace CustomGameModes.Configs
 
         [Description("pregame round instruction size")]
         public int PregameRoundInstructionSize { get; set; } = 15;
+
+        [Description("In Normal, % chance of D-Children")]
+        public int DChildrenChance { get; set; } = 10;
     }
 }

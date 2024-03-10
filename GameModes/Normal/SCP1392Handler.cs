@@ -9,6 +9,7 @@ using Exiled.API.Enums;
 using System;
 using Exiled.Events.EventArgs.Interfaces;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Linq;
 
 namespace CustomGameModes.GameModes.Normal
 {
@@ -50,7 +51,7 @@ namespace CustomGameModes.GameModes.Normal
         {
             PlayerEvent.ReceivingEffect += ReceivingEffect;
             PlayerEvent.Dying += Dying;
-            PlayerEvent.EnteringPocketDimension += EnteringPocketDimension;
+            PlayerEvent.FailingEscapePocketDimension += FailingEscapePocketDimension;
             PlayerEvent.Hurt += Hurt;
         }
 
@@ -58,7 +59,7 @@ namespace CustomGameModes.GameModes.Normal
         {
             PlayerEvent.ReceivingEffect -= ReceivingEffect;
             PlayerEvent.Dying -= Dying;
-            PlayerEvent.EnteringPocketDimension -= EnteringPocketDimension;
+            PlayerEvent.FailingEscapePocketDimension -= FailingEscapePocketDimension;
             PlayerEvent.Hurt -= Hurt;
             Instances.Remove(this);
         }
@@ -123,10 +124,11 @@ namespace CustomGameModes.GameModes.Normal
             }
         }
 
-        private void EnteringPocketDimension(EnteringPocketDimensionEventArgs ev)
+        private void FailingEscapePocketDimension(FailingEscapePocketDimensionEventArgs ev)
         {
             if (!CheckOwner(ev.Player)) return;
             ev.IsAllowed = false;
+            ev.Player.Position = Player.Get(Team.SCPs).Where(scp => scp.Role != RoleTypeId.Scp079).GetRandomValue().Position;
         }
 
         private IEnumerator<float> Hurt(HurtEventArgs ev)

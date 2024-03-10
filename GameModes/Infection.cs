@@ -16,6 +16,7 @@ using Exiled.API.Extensions;
 using CustomGameModes.API;
 using Exiled.API.Structs;
 using Exiled.API.Features.Doors;
+using Exiled.API.Features.Pickups;
 
 namespace CustomGameModes.GameModes
 {
@@ -61,7 +62,6 @@ namespace CustomGameModes.GameModes
             PlayerEvent.TriggeringTesla += DeniableEvent;
             PlayerEvent.Escaping += OnEscape;
             PlayerEvent.Dying += OnDied;
-            PlayerEvent.SearchingPickup += OnSearchingPickup;
             PlayerEvent.InteractingDoor += OnDoor;
             PlayerEvent.ActivatingWarheadPanel += DeniableEvent;
             PlayerEvent.InteractingElevator += OnElevator;
@@ -77,7 +77,6 @@ namespace CustomGameModes.GameModes
             PlayerEvent.TriggeringTesla -= DeniableEvent;
             PlayerEvent.Escaping -= OnEscape;
             PlayerEvent.Dying -= OnDied;
-            PlayerEvent.SearchingPickup -= OnSearchingPickup;
             PlayerEvent.InteractingDoor -= OnDoor;
             PlayerEvent.ActivatingWarheadPanel -= DeniableEvent;
             PlayerEvent.InteractingElevator -= OnElevator;
@@ -123,6 +122,10 @@ namespace CustomGameModes.GameModes
             {
                 ezRoom.TurnOffLights(9999f);
             }
+            foreach (var pickup in Pickup.List)
+            {
+                pickup.Destroy();
+            }
 
             while (Round.InProgress)
             {
@@ -138,7 +141,7 @@ namespace CustomGameModes.GameModes
 
                     if (Player.Get(p => p.Zone == ZoneType.LightContainment).Count() == 0) TryCloseDoorsInZone(ZoneType.HeavyContainment, ref ClosedHcz);
 
-                SCPHUD:
+                    // SCPHUD:
                     {
                         IEnumerable<string> lines()
                         {
@@ -159,7 +162,7 @@ namespace CustomGameModes.GameModes
                         }
                     }
 
-                ChaosHUD:
+                    // ChaosHUD:
                     {
                         if (Escapees.Count > 0)
                         {
@@ -258,6 +261,12 @@ namespace CustomGameModes.GameModes
             scp.ShowHint($"""
                 A Survivor {SurvivorStr} has Escaped and returned as {EscapeeStr}!
                 Beware!
+
+
+
+
+
+
                 """, 20);
         }
 
@@ -266,8 +275,13 @@ namespace CustomGameModes.GameModes
             classd.ShowHint($"""
                 Escape The Facility!
                 Avoid the Infected {InfectedStr}s!
-                No Picking up Items!
                 Tesla Gates are OFF!
+
+
+
+
+
+
                 """, 15);
         }
 
@@ -276,6 +290,12 @@ namespace CustomGameModes.GameModes
             scp.ShowHint($"""
                 Tesla Gates are OFF!
                 Kill the Survivor {SurvivorStr}s Before They Escape!
+
+
+
+
+
+
                 """, 15);
         }
 
