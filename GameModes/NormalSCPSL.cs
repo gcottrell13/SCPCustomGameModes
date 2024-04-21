@@ -16,12 +16,14 @@ namespace CustomGameModes.GameModes
         SCP5000Handler SCP5000Handler { get; set; }
         ClassDStarterInventory ClassDStarterInventory { get; set; }
         CellGuard CellGuard { get; set; }
+        GnomeoSquad GnomeoSquad { get; set; }
 
         public NormalSCPSL()
         {
             SCP5000Handler = new SCP5000Handler();
             ClassDStarterInventory = new ClassDStarterInventory();
             CellGuard = new CellGuard();
+            GnomeoSquad = new GnomeoSquad();
         }
 
 
@@ -50,6 +52,7 @@ namespace CustomGameModes.GameModes
             SCP5000Handler.SubscribeEventHandlers();
             ClassDStarterInventory.SubscribeEventHandlers();
             CellGuard.SubscribeEventHandlers();
+            GnomeoSquad.SubscribeEventHandlers();
             new SkeletonSpawner().SubscribeEventHandlers();
             new DChildren().Setup();
 
@@ -60,6 +63,7 @@ namespace CustomGameModes.GameModes
             SCP5000Handler.UnsubscribeEventHandlers();
             ClassDStarterInventory.UnsubscribeEventHandlers();
             CellGuard.UnsubscribeEventHandlers();
+            GnomeoSquad.UnsubscribeEventHandlers();
 
             PlayerEvent.Spawned -= OnSpawn;
         }

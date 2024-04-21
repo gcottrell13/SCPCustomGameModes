@@ -80,22 +80,10 @@ namespace CustomGameModes.GameModes
                 player.ShowHint("The Door is Open", 7);
             }
 
-        Normal:
-            while(!Manager.BeastSickoModeActivate)
-            {
-                yield return Timing.WaitForSeconds(1);
-            }
-
-        SickoMode:
-            var humanCount = Manager.Humans().Count;
-            while (Manager.BeastSickoModeActivate)
+            while (true)
             {
                 var nearest = GetNearestCrewmate();
-                var compass = humanCount switch
-                {
-                    1 => HotAndCold(nearest?.Position),
-                    _ => CompassToPlayer(nearest),
-                };
+                var compass = DistanceTo(nearest) > 10 ? HotAndCold(nearest?.Position) : "<color=red>They are nearby!</color>";
 
                 if (nearest != null)
                 {
@@ -104,7 +92,6 @@ namespace CustomGameModes.GameModes
 
                 yield return Timing.WaitForSeconds(0.5f);
             }
-            goto Normal;
 
         }
     }

@@ -48,31 +48,38 @@ namespace CustomGameModes.GameModes
 
         public bool BeastReleased = false;
 
+        private int roleDistroIndex = 0;
+        private int roleLoopPoint = 0;
         public string[] RoleDistribution;
 
         public DhasRoleManager()
         {
             var A = new[] { DhasRoleClassD.name, DhasRoleScientist.name }.ManyRandom();
 
+            roleDistroIndex = 0;
+            roleLoopPoint = 7;
             RoleDistribution = new[]
             {
-                BeastRole.name,
                 A[0],
+                BeastRole.name,
                 A[1],
                 DhasRoleGuardian.name,
                 DhasRoleDaredevil.name,
                 DhasRoleClinger.name,
                 DhasRoleMadman.name,
+                DhasRoleClinger.name,
                 DhasRoleClassD.name,
-                DhasRoleDaredevil.name,
-                DhasRoleGuardian.name,
                 DhasRoleScientist.name,
                 DhasRoleClassD.name,
-                DhasRoleClinger.name,
-                DhasRoleDaredevil.name,
-                DhasRoleClassD.name,
-                DhasRoleClinger.name,
             };
+        }
+
+        public void ApplyNextRole(Player player)
+        {
+            roleDistroIndex++;
+            if (roleDistroIndex >= RoleDistribution.Length)
+                roleDistroIndex = roleLoopPoint;
+            ApplyRoleToPlayer(player, RoleDistribution[roleDistroIndex]);
         }
 
         public Dictionary<string, Func<Player, DhasRole>> RoleClasses() => new()
@@ -95,12 +102,14 @@ namespace CustomGameModes.GameModes
                 ActiveRoles.Remove(existingRole);
             }
 
+            PlayerRoles[player] = null;
             var role = RoleClasses()[name](player);
+            PlayerRoles[player] = role;
+
             player.ClearInventory();
             role.GetPlayerReadyAndEquipped();
 
             ActiveRoles.Add(role);
-            PlayerRoles[player] = role;
             return role;
         }
 

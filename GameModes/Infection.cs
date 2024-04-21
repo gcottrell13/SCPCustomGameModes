@@ -64,7 +64,7 @@ namespace CustomGameModes.GameModes
             PlayerEvent.Dying += OnDied;
             PlayerEvent.InteractingDoor += OnDoor;
             PlayerEvent.ActivatingWarheadPanel += DeniableEvent;
-            PlayerEvent.InteractingElevator += OnElevator;
+            PlayerEvent.InteractingElevator += OnElevator; 
 
             ServerEvent.RespawningTeam += DeniableEvent;
 
@@ -130,13 +130,33 @@ namespace CustomGameModes.GameModes
             while (Round.InProgress)
             {
 
+                var extraPlayers = Player.List.ToHashSet().Except(Infected.Union(Escapees).Union(Survivors)).ToHashSet();
+                if (extraPlayers.Count > 0)
+                {
+                    foreach (Player extra in extraPlayers)
+                    {
+                        if (Warhead.IsDetonated)
+                        {
+                            SetupEscapee(extra);
+                        }
+                        else if (Map.IsLczDecontaminated)
+                        {
+                            SetupInfected(extra);
+                        }
+                        else
+                        {
+                            SetupSurvivor(extra);
+                        }
+                    }
+                }
+
                 try
                 {
 
                     var survivorsAndEscapees = Survivors.Union(Escapees).ToHashSet();
                     var inLcz = survivorsAndEscapees.Where(p => p.Zone == ZoneType.LightContainment).Count();
                     var inHcz = survivorsAndEscapees.Where(p => p.Zone == ZoneType.HeavyContainment).Count();
-                    var inEz = survivorsAndEscapees.Where(p => p.Zone == ZoneType.Entrance || p.CurrentRoom.Type == RoomType.HczEzCheckpointA || p.CurrentRoom.Type == RoomType.HczEzCheckpointB).Count();
+                    var inEz = survivorsAndEscapees.Where(p => (p.Zone & ZoneType.Entrance) != 0).Count(); // the HCZ-Entrance checkpoints count as being in both zones
                     var inSurface = survivorsAndEscapees.Where(p => p.Zone == ZoneType.Surface).Count();
 
                     if (Player.Get(p => p.Zone == ZoneType.LightContainment).Count() == 0) TryCloseDoorsInZone(ZoneType.HeavyContainment, ref ClosedHcz);

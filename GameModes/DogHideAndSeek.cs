@@ -69,11 +69,11 @@ namespace CustomGameModes.GameModes
             PlayerEvent.DroppingAmmo += DeniableEvent;
             PlayerEvent.InteractingElevator += DeniableEvent;
             PlayerEvent.PlayerDamageWindow += PlayerDamagingWindow;
+            PlayerEvent.Spawned += Spawned;
 
             ServerEvent.EndingRound += OnEndingRound;
             ServerEvent.RespawningTeam += DeniableEvent;
 
-            Scp914Handler.Activating += Activate914;
             Scp914Handler.UpgradingPickup += UpgradePickup;
             Scp914Handler.UpgradingInventoryItem += UpgradeInventory;
             // -------------------------------------------------------------
@@ -105,11 +105,11 @@ namespace CustomGameModes.GameModes
             PlayerEvent.DroppingAmmo -= DeniableEvent;
             PlayerEvent.InteractingElevator -= DeniableEvent;
             PlayerEvent.PlayerDamageWindow -= PlayerDamagingWindow;
+            PlayerEvent.Spawned -= Spawned;
 
             ServerEvent.EndingRound -= OnEndingRound;
             ServerEvent.RespawningTeam -= DeniableEvent;
 
-            Scp914Handler.Activating -= Activate914;
             Scp914Handler.UpgradingPickup -= UpgradePickup;
             Scp914Handler.UpgradingInventoryItem -= UpgradeInventory;
             // -------------------------------------------------------------
@@ -139,9 +139,22 @@ namespace CustomGameModes.GameModes
 
         #region Event Handlers
 
+        private void Spawned(SpawnedEventArgs ev)
+        {
+            if (Manager == null)
+                return;
+            if (Manager.PlayerRoles.ContainsKey(ev.Player))
+                return;
+            if (Round.ElapsedTime > TimeSpan.FromSeconds(1))
+                Manager.ApplyNextRole(ev.Player);
+        }
+
         private void OnEndingRound(EndingRoundEventArgs ev)
         {
-            if (Round.IsLocked) return;
+            if (Manager == null)
+                return;
+            if (Round.IsLocked) 
+                return;
 
             if (DidTimeRunOut || Manager?.Beast().Count == 0)
             {
@@ -157,7 +170,8 @@ namespace CustomGameModes.GameModes
 
         private void PlayerDamagingWindow(DamagingWindowEventArgs ev)
         {
-            if (Manager == null) return;
+            if (Manager == null) 
+                return;
 
             if (ev.Window.Room.Type == RoomType.LczGlassBox)
             {
@@ -176,20 +190,19 @@ namespace CustomGameModes.GameModes
 
         private void OnSearchingPickup(SearchingPickupEventArgs ev)
         {
-            if (Manager == null) { ev.IsAllowed = false; return; }
-            if (Manager.ClaimedPickups.TryGetValue(ev.Pickup, out var assignedPlayer) && ev.Player == assignedPlayer)
+            if (Manager == null)
             {
-                // allow it
+                return;
+            }
+            else if (Manager.ClaimedPickups.TryGetValue(ev.Pickup, out var assignedPlayer) && ev.Player != assignedPlayer)
+            {
+                DeniableEvent(ev);
             }
             else if (ev.Pickup.PreviousOwner == ev.Player)
             {
                 // allow it
             }
             else if (ev.Pickup.Type.IsAmmo() || ev.Pickup.Type.IsWeapon())
-            {
-                // allow it
-            }
-            else if (Manager.ClaimedPickups.ContainsKey(ev.Pickup) == false)
             {
                 // allow it
             }
@@ -201,9 +214,9 @@ namespace CustomGameModes.GameModes
 
         private void OnInteractDoor(InteractingDoorEventArgs ev)
         {
-            if (Manager == null) 
+            if (Manager == null)
             {
-                DeniableEvent(ev);
+                return;
             }
             else if (ev.Door == beastDoor || ev.Door.Zone != ZoneType.LightContainment || ev.Door.IsElevator)
             {
@@ -227,11 +240,11 @@ namespace CustomGameModes.GameModes
                 }
                 else
                 {
-                    if (DoorsReopenAfterClosing.Contains(ev.Door) && ev.Door.IsOpen)
+                    if (DoorsReopenAfterClosing.Contains(ev.Door) && !ev.Door.IsOpen)
                     {
                         Timing.CallDelayed(2f, () =>
                         {
-                            ev.Door.IsOpen = true;
+                            ev.Door.IsOpen = false;
                         });
                     }
                 }
@@ -241,6 +254,8 @@ namespace CustomGameModes.GameModes
 
         private void OnHurting(HurtingEventArgs ev)
         {
+            if (Manager == null)
+                return;
             // allow the Class-D to hurt/kill the beast after they win
             // disallow the beast to hurt the Class-D after it loses
 
@@ -254,17 +269,10 @@ namespace CustomGameModes.GameModes
                 DeniableEvent(ev);
         }
 
-        private void Activate914(ActivatingEventArgs ev)
-        {
-            if (Manager == null)
-                DeniableEvent(ev);
-            if (!Manager.AllowedToUse914.Contains(ev.Player))
-                DeniableEvent(ev);
-        }
-
         private void UpgradeInventory(UpgradingInventoryItemEventArgs ev)
         {
-            if (Manager == null) { ev.IsAllowed = false; return; }
+            if (Manager == null)
+                return;
 
             if (UpgradeHelper.Upgrade(ev, out Item newItem))
             {
@@ -283,8 +291,9 @@ namespace CustomGameModes.GameModes
 
         private void UpgradePickup(UpgradingPickupEventArgs ev)
         {
-            if (Manager == null) { ev.IsAllowed = false; return; }
-            
+            if (Manager == null)
+                return;
+
             if (UpgradeHelper.Upgrade(ev, out Pickup newPickup))
             {
                 DeniableEvent(ev);
@@ -307,6 +316,8 @@ namespace CustomGameModes.GameModes
 
         public void DeniableEvent(IDeniableEvent ev)
         {
+            if (Manager == null)
+                return;
             ev.IsAllowed = false;
         }
 
@@ -387,14 +398,12 @@ namespace CustomGameModes.GameModes
             #region Set up Players
             Log.Debug("DHAS - set up players");
 
-            var roles = Manager.RoleDistribution;
-
             var iterator = 0;
             while (iterator < players.Count)
             {
                 var index = (iterator + gamesPlayed) % players.Count;
                 var player = players[index];
-                Manager.ApplyRoleToPlayer(player, roles[iterator]);
+                Manager.ApplyNextRole(player);
                 iterator++;
             }
 
@@ -487,12 +496,8 @@ namespace CustomGameModes.GameModes
 
             void ActivateBeastSickoMode()
             {
-                if (Manager.BeastSickoModeActivate == true)
+                if (Manager == null || Manager.BeastSickoModeActivate == true)
                     return;
-
-                var t = timerTotalSeconds - elapsedTime();
-                if (t > 65)
-                    removeTime(t - 61);
 
                 Manager.BeastSickoModeActivate = true;
                 foreach (var room in Room.Get(ZoneType.LightContainment))
@@ -500,8 +505,6 @@ namespace CustomGameModes.GameModes
                     room.TurnOffLights(0);
                     room.Color = Color.red;
                 }
-                getBroadcast = p => p.SickoModeBroadcast;
-                removeTime(0);
             }
 
             while (elapsedTime() < timerTotalSeconds)

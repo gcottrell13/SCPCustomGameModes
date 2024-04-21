@@ -355,6 +355,10 @@ namespace CustomGameModes.GameModes
         {
             if (p == null)
                 return "";
+            if (p.IsDead)
+            {
+                return GetCompass(Ragdoll.Get(p).First().Position);
+            }
             if (p.Zone != player.Zone)
             {
                 string compass = p.CurrentRoom?.Type switch
@@ -368,10 +372,6 @@ namespace CustomGameModes.GameModes
                     This player is in {p.Zone}, in {p.CurrentRoom?.Type ?? RoomType.Unknown} room:
                     {compass}
                     """;
-            }
-            else if (p.IsDead)
-            {
-                return GetCompass(Ragdoll.Get(p).First().Position);
             }
             else
             {

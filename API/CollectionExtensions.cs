@@ -50,5 +50,7 @@ namespace CustomGameModes.API
             }
             return result;
         }
+
+        public static IEnumerable<T> Reversed<T>(this IEnumerable<T> source) => source.Reverse();
     }
 }
