@@ -76,10 +76,10 @@ namespace CustomGameModes.GameModes
 
         public void ApplyNextRole(Player player)
         {
+            ApplyRoleToPlayer(player, RoleDistribution[roleDistroIndex]);
             roleDistroIndex++;
             if (roleDistroIndex >= RoleDistribution.Length)
                 roleDistroIndex = roleLoopPoint;
-            ApplyRoleToPlayer(player, RoleDistribution[roleDistroIndex]);
         }
 
         public Dictionary<string, Func<Player, DhasRole>> RoleClasses() => new()

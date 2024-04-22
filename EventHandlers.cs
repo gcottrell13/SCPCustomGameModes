@@ -32,6 +32,7 @@ namespace CustomGameModes
             { "n", () => new NormalSCPSL() },
             { "t", () => new Tutorial() },
             { "5k", () => new Scp5000Test() },
+            { "ttt", () => new TroubleInLC() },
         };
 
         internal void RegisterEvents()
