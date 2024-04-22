@@ -61,5 +61,8 @@ namespace CustomGameModes.Configs
 
         [Description("In Normal, % chance of D-Children")]
         public int DChildrenChance { get; set; } = 10;
+
+        [Description("TTT Max Karma")]
+        public int TttMaxKarma { get; set; } = 1500;
     }
 }
