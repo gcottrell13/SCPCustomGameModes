@@ -64,5 +64,19 @@ namespace CustomGameModes.Configs
 
         [Description("TTT Max Karma")]
         public int TttMaxKarma { get; set; } = 1500;
+
+        [Description("TTT Credit Store")]
+        public Dictionary<ItemType, int> TttStore { get; set; } = new()
+        {
+            { ItemType.SCP207, 2 },
+            { ItemType.GrenadeFlash, 1 },
+            { ItemType.Medkit, 1 },
+        };
+
+        [Description("TTT Credit for killing Innocent")]
+        public int TttKillInnocentReward { get; set; } = 1;
+
+        [Description("TTT Credit to detective for CI dying")]
+        public int TttCiDyingReward { get; set; } = 1;
     }
 }
