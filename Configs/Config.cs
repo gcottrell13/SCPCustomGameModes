@@ -78,5 +78,8 @@ namespace CustomGameModes.Configs
 
         [Description("TTT Credit to detective for CI dying")]
         public int TttCiDyingReward { get; set; } = 1;
+
+        [Description("TTT Traitor starting credits")]
+        public int TttTraitorStartCredits { get; set; } = 1;
     }
 }

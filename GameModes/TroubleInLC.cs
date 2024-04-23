@@ -29,8 +29,8 @@ internal class TroubleInLC : IGameMode
     public bool? FFStateBefore = null;
 
     public const int DefaultKarma = 1000;
-    public static Dictionary<Player, int> Karma = new Dictionary<Player, int>();
-    public Dictionary<Player, int> BaseKarma;
+    public static Dictionary<Player, int> BaseKarma = new Dictionary<Player, int>();
+    public Dictionary<Player, int> LiveKarma;
 
     public string Name => "Trouble In Light Containment";
 
@@ -51,7 +51,7 @@ internal class TroubleInLC : IGameMode
 
     public TroubleInLC()
     {
-        BaseKarma = Karma.ToDictionary(kvp => kvp.Key, kvp => kvp.Value); // copy the karma as it was at the beginning of the round
+        LiveKarma = BaseKarma.ToDictionary(kvp => kvp.Key, kvp => kvp.Value); // copy the karma as it was at the beginning of the round
         TrackedPlayers = new HashSet<Player>();
         DamagedATeammate = new HashSet<Player>();
         Credits = new Dictionary<Player, int>();
@@ -79,7 +79,7 @@ internal class TroubleInLC : IGameMode
             player.CustomName = null;
         }
 
-        Karma = BaseKarma.ToDictionary(kvp => kvp.Key, kvp => kvp.Value); // copy the karma as it was at the end of the round
+        BaseKarma = LiveKarma.ToDictionary(kvp => kvp.Key, kvp => kvp.Value); // copy the karma as it was at the end of the round
     }
 
     public void OnRoundStart()
@@ -206,6 +206,7 @@ internal class TroubleInLC : IGameMode
                     {
                         player.Role.Set(RoleTypeId.ChaosRepressor, RoleSpawnFlags.None);
                         troublemakers.Add(player);
+                        Credits[player] = config.TttTraitorStartCredits;
                         break;
                     }
                 default:
@@ -214,6 +215,7 @@ internal class TroubleInLC : IGameMode
                         if (player.Role == RoleTypeId.Scientist)
                         {
                             Detectives.Add(player);
+                            Credits[player] = config.TttTraitorStartCredits;
                         }
                         break;
                     }
@@ -231,7 +233,10 @@ internal class TroubleInLC : IGameMode
                 ci.AddItem(ItemType.Medkit);
                 ci.AddItem(ItemType.Flashlight);
                 ShowBaseKarmaOnPlayer(ci);
-                ci.ShowHint("You are a Traitor! Kill everyone who isn't Chaos Insurgency.\nYou can buy items once you kill Innocents.", 30);
+                ci.ShowHint($"""
+                    You are a Traitor! Kill everyone who isn't Chaos Insurgency.
+                    You can earn shop credits by killing Innocents (starting {Credits[ci]} credits).
+                    """, 30);
             }
 
             foreach (Player scientinst in scientists)
@@ -252,7 +257,10 @@ internal class TroubleInLC : IGameMode
 
         if (Detectives.Contains(scientinst))
         {
-            scientinst.ShowHint("You are a Detective!\nYou can discover a body's killer, and buy items once a traitor dies.", 30);
+            scientinst.ShowHint($"""
+                You are a Detective! You can discover a body's killer.
+                You can earn shop credits when a Traitor dies (starting {Credits[scientinst]} credits).
+                """, 30);
         }
     }
 
@@ -260,15 +268,15 @@ internal class TroubleInLC : IGameMode
     {
         var max = config.TttMaxKarma;
         var current = GetKarma(player);
-        BaseKarma[player] = Math.Min(Math.Max(0, current + amount), max);
+        LiveKarma[player] = Math.Min(Math.Max(0, current + amount), max);
     }
 
     public int GetKarma(Player player)
     {
-        if (BaseKarma.TryGetValue(player, out var karma))
+        if (LiveKarma.TryGetValue(player, out var karma))
             return karma;
-        BaseKarma[player] = DefaultKarma;
-        return BaseKarma[player];
+        LiveKarma[player] = DefaultKarma;
+        return LiveKarma[player];
     }
 
     public void ShowBaseKarmaOnPlayer(Player player)
@@ -305,8 +313,10 @@ internal class TroubleInLC : IGameMode
         if (ev.Player.Role.Team == ev.Attacker.Role.Team)
         {
             AdjustKarma(ev.Attacker, -GetKarma(ev.Player) / 10);
+            return;
         }
-        else if (ev.Attacker.Role.Team == Team.ChaosInsurgency)
+        
+        if (ev.Attacker.Role.Team == Team.ChaosInsurgency)
         {
             var reward = config.TttKillInnocentReward;
             var title = "";
@@ -322,6 +332,7 @@ internal class TroubleInLC : IGameMode
                 """, 15);
 
             ev.DamageHandler.Attacker = null;
+            AdjustKarma(ev.Attacker, 20);
         }
 
         if (ev.Player.Role.Team == Team.ChaosInsurgency)
@@ -334,6 +345,7 @@ internal class TroubleInLC : IGameMode
                     {OpenStoreInstructions}
                     """, 15);
             }
+            AdjustKarma(ev.Attacker, 40);
         }
 
         Killers[ev.Player] = ev.Attacker;
