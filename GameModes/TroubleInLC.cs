@@ -21,6 +21,9 @@ using CustomGameModes.Commands;
 using CustomGameModes.API;
 using Exiled.API.Features.DamageHandlers;
 using PlayerStatsSystem;
+using PluginAPI.Roles;
+using Scp914;
+using UnityEngine;
 
 namespace CustomGameModes.GameModes;
 
@@ -45,6 +48,16 @@ internal class TroubleInLC : IGameMode
     public Dictionary<Player, Player> Killers; // [dead person] => killer
     public HashSet<Ragdoll> RevealedBodies;
 
+    public List<Player> scientists = new List<Player>();
+    public List<Player> troublemakers = new List<Player>();
+
+    private TimeSpan TraitorDetectorCooldown = TimeSpan.FromMinutes(2);
+    DateTime LastDetection = DateTime.MinValue;
+
+    private Exiled.API.Features.Toys.Light IntakeLight;
+    private Exiled.API.Features.Toys.Light OutputLight;
+    private bool DetectedTraitor;
+
     private CoroutineHandle coroutineHandle;
 
     private Config config;
@@ -59,6 +72,8 @@ internal class TroubleInLC : IGameMode
         config = CustomGameModes.Singleton.Config;
         Killers = new Dictionary<Player, Player>();
         RevealedBodies = new HashSet<Ragdoll>();
+        LastDetection = DateTime.MinValue;
+        DetectedTraitor = false;
     }
 
     ~TroubleInLC()
@@ -84,7 +99,13 @@ internal class TroubleInLC : IGameMode
 
     public void OnRoundStart()
     {
+        Credits.Clear();
         SubscribeEventHandlers();
+
+        IntakeLight = Exiled.API.Features.Toys.Light.Create(Scp914Controller.Singleton.IntakeChamber.position);
+        OutputLight = Exiled.API.Features.Toys.Light.Create(Scp914Controller.Singleton.OutputChamber.position);
+        IntakeLight.Intensity = 5f;
+        OutputLight.Intensity = 5f;
 
         coroutineHandle = Timing.RunCoroutine(roundCoroutine());
     }
@@ -138,6 +159,7 @@ internal class TroubleInLC : IGameMode
         while (Round.InProgress)
         {
             yield return Timing.WaitForSeconds(1f);
+            UpdateLights();
 
             foreach (Player player in Player.List)
             {
@@ -147,44 +169,31 @@ internal class TroubleInLC : IGameMode
                 }
             }
 
-            foreach (Player detective in Detectives)
+            try
             {
-                if (!detective.IsAlive)
-                    continue;
 
-                foreach (Ragdoll ragdoll in Ragdoll.List)
+                foreach (Player detective in Detectives)
                 {
-                    if (RevealedBodies.Contains(ragdoll) || !Killers.ContainsKey(ragdoll.Owner))
+                    if (!detective.IsAlive)
                         continue;
-                    if ((detective.Position - ragdoll.Position).magnitude > 1)
-                        continue;
-                    RevealedBodies.Add(ragdoll);
-                    var killerName = Killers[ragdoll.Owner].DisplayNickname;
-                    ragdoll.Nickname = $"Killed By {killerName} - {ragdoll.Owner.DisplayNickname}"; // 's body - they were Scientist
-                    ragdoll.Owner.CustomName = $"{ragdoll.Owner.DisplayNickname} - Killed by {killerName}";
-                    Log.Debug($"Setting ragdoll nickname: {ragdoll.Nickname}");
-                    //if ((detective.Position - ragdoll.Position).magnitude < 1)
-                    //{
-                    //    switch (ragdoll.DamageHandler)
-                    //    {
-                    //        case PlayerStatsSystem.FirearmDamageHandler handler:
-                    //            {
-                    //                handler.Attacker = Killers[ragdoll.Owner].Footprint;
-                    //                break;
-                    //            }
-                    //        case PlayerStatsSystem.ExplosionDamageHandler handler:
-                    //            {
-                    //                handler.Attacker = Killers[ragdoll.Owner].Footprint;
-                    //                break;
-                    //            }
-                    //        case PlayerStatsSystem.AttackerDamageHandler handler:
-                    //            {
-                    //                handler.Attacker = Killers[ragdoll.Owner].Footprint;
-                    //                break;
-                    //            }
-                    //    }
-                    //}
+
+                    foreach (Ragdoll ragdoll in Ragdoll.List)
+                    {
+                        if (RevealedBodies.Contains(ragdoll))
+                            continue;
+                        if ((detective.Position - ragdoll.Position).magnitude > 2)
+                            continue;
+                        RevealedBodies.Add(ragdoll);
+                        var killerName = Killers.TryGetValue(ragdoll.Owner, out var killer) ? killer?.DisplayNickname : "Unknown Killer";
+                        ragdoll.Nickname = $"Killed By {killerName} - {ragdoll.Owner.DisplayNickname}"; // 's body - they were Scientist
+                        ragdoll.Owner.CustomName = $"{ragdoll.Owner.DisplayNickname} - Killed by {killerName}";
+                        Log.Info($"Setting ragdoll nickname: {ragdoll.Nickname}");
+                    }
                 }
+            }
+            catch (Exception e)
+            {
+                Log.Error(e);
             }
         }
 
@@ -192,9 +201,6 @@ internal class TroubleInLC : IGameMode
 
     public void SetupPlayers()
     {
-        var scientists = new List<Player>();
-        var troublemakers = new List<Player>();
-
         Round.IsLocked = true;
 
         foreach (Player player in Player.List)
@@ -206,7 +212,6 @@ internal class TroubleInLC : IGameMode
                     {
                         player.Role.Set(RoleTypeId.ChaosRepressor, RoleSpawnFlags.None);
                         troublemakers.Add(player);
-                        Credits[player] = config.TttTraitorStartCredits;
                         break;
                     }
                 default:
@@ -215,53 +220,82 @@ internal class TroubleInLC : IGameMode
                         if (player.Role == RoleTypeId.Scientist)
                         {
                             Detectives.Add(player);
-                            Credits[player] = config.TttTraitorStartCredits;
                         }
                         break;
                     }
             }
         }
 
-        Timing.CallDelayed(0.1f, () =>
+        Timing.CallDelayed(0.3f, () =>
         {
             foreach (Player ci in troublemakers)
             {
-                ci.ChangeAppearance(RoleTypeId.Scientist, scientists);
-                ci.Position = RoleTypeId.Scientist.GetRandomSpawnLocation().Position;
-                ci.AddItem(FirearmType.Com15, new AttachmentIdentifier[] { });
-                ci.AddItem(ItemType.KeycardScientist);
-                ci.AddItem(ItemType.Medkit);
-                ci.AddItem(ItemType.Flashlight);
-                ShowBaseKarmaOnPlayer(ci);
-                ci.ShowHint($"""
-                    You are a Traitor! Kill everyone who isn't Chaos Insurgency.
-                    You can earn shop credits by killing Innocents (starting {Credits[ci]} credits).
-                    """, 30);
+                try
+                {
+                    SetupTraitor(ci);
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e);
+                }
             }
 
             foreach (Player scientinst in scientists)
             {
-                SetupScientist(scientinst);
-                ShowBaseKarmaOnPlayer(scientinst);
+                try
+                {
+                    SetupScientist(scientinst);
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e);
+                }
             }
 
             Round.IsLocked = false;
         });
     }
 
-    public void SetupScientist(Player scientinst)
+    public void SetupTraitor(Player ci)
     {
-        scientinst.Role.Set(RoleTypeId.Scientist);
-        scientinst.AddItem(FirearmType.Com15, new AttachmentIdentifier[] { });
-        scientinst.AddItem(ItemType.Flashlight);
+        Credits[ci] = config.TttTraitorStartCredits;
+        ci.Position = RoleTypeId.ClassD.GetRandomSpawnLocation().Position;
+        ci.AddItem(FirearmType.Com15, new AttachmentIdentifier[] { });
+        ci.AddItem(ItemType.KeycardScientist);
+        ci.AddItem(ItemType.Medkit);
+        ci.AddItem(ItemType.Flashlight);
+        ci.ShowHint($"""
+                    You are a Traitor! Kill everyone who isn't Chaos Insurgency.
+                    You can earn shop credits by killing Innocents (starting {GetCredits(ci)} credits).
+                    {OpenStoreInstructions}
+                    """, 30);
+        ShowBaseKarmaOnPlayer(ci);
+        ci.ChangeAppearance(RoleTypeId.Scientist, scientists);
+    }
 
-        if (Detectives.Contains(scientinst))
+    public void SetupScientist(Player scientist)
+    {
+        scientist.Role.Set(RoleTypeId.Scientist);
+        scientist.AddItem(FirearmType.Com15, new AttachmentIdentifier[] { });
+        scientist.Position = RoleTypeId.ClassD.GetRandomSpawnLocation().Position;
+        scientist.AddItem(ItemType.Flashlight);
+
+        if (Detectives.Contains(scientist))
         {
-            scientinst.ShowHint($"""
+            Credits[scientist] = config.TttTraitorStartCredits;
+            scientist.ShowHint($"""
                 You are a Detective! You can discover a body's killer.
-                You can earn shop credits when a Traitor dies (starting {Credits[scientinst]} credits).
+                You can earn shop credits when a Traitor dies (starting {GetCredits(scientist)} credits).
+                {OpenStoreInstructions}
                 """, 30);
         }
+        else
+        {
+            scientist.ShowHint($"""
+                You are an Innocent! Avoid dying, and shoot Traitors!
+                """, 30);
+        }
+        ShowBaseKarmaOnPlayer(scientist);
     }
 
     public void AdjustKarma(Player player, int amount)
@@ -276,12 +310,16 @@ internal class TroubleInLC : IGameMode
         if (LiveKarma.TryGetValue(player, out var karma))
             return karma;
         LiveKarma[player] = DefaultKarma;
-        return LiveKarma[player];
+        return DefaultKarma;
     }
 
     public void ShowBaseKarmaOnPlayer(Player player)
     {
         player.CustomInfo = KarmaRank(player);
+        if (Detectives.Contains(player))
+        {
+            player.CustomInfo = $"{player.CustomInfo} - Detective";
+        }
     }
 
     public void AddCredits(Player player, int amount)
@@ -291,6 +329,11 @@ internal class TroubleInLC : IGameMode
         Credits[player] += amount;
     }
 
+    public int GetCredits(Player player)
+    {
+        return Credits.TryGetValue(player, out var credits) ? credits : 0;
+    }
+
     public void OnElevator(InteractingElevatorEventArgs ev)
     {
         ev.IsAllowed = false;
@@ -298,10 +341,22 @@ internal class TroubleInLC : IGameMode
 
     public void OnUpgradingPlayer(UpgradingPlayerEventArgs ev)
     {
-        if (ev.KnobSetting == Scp914.Scp914KnobSetting.Rough)
+        if (ev.KnobSetting == Scp914KnobSetting.Rough)
         {
-            ev.Player.ChangeAppearance(ev.Player.Role, Player.List);
-            ev.Player.Health /= 2;
+            if (DateTime.Now - LastDetection > TraitorDetectorCooldown)
+            {
+                ev.Player.Health /= 2;
+                if (ev.Player.IsCHI)
+                {
+                    DetectedTraitor = true;
+                    foreach (Player player in Player.List)
+                    {
+                        player.ShowHint("There is at least one <color=green>Traitor</color> in SCP 914");
+                    }
+                }
+                LastDetection = DateTime.Now;
+                UpdateLights();
+            }
         }
     }
 
@@ -310,32 +365,26 @@ internal class TroubleInLC : IGameMode
         if (ev.Player == null || ev.Attacker == null)
             return;
 
+        Killers[ev.Player] = ev.Attacker;
+
         if (ev.Player.Role.Team == ev.Attacker.Role.Team)
         {
             AdjustKarma(ev.Attacker, -GetKarma(ev.Player) / 10);
-            return;
         }
-        
-        if (ev.Attacker.Role.Team == Team.ChaosInsurgency)
+        else if (ev.Attacker.Role.Team == Team.ChaosInsurgency)
         {
-            var reward = config.TttKillInnocentReward;
-            var title = "";
-            if (Detectives.Contains(ev.Player))
-            {
-                title = "Detective ";
-                reward *= 2;
-            }
+            var reward = Detectives.Contains(ev.Player) ? config.TttKillInnocentReward * 2 : config.TttKillInnocentReward;
+
             AddCredits(ev.Attacker, reward);
             ev.Attacker.ShowHint($"""
-                You got {reward} credits for killing {title}{ev.Player.DisplayNickname}.
+                You got {reward} credits for killing {ev.Player.DisplayNickname}.
                 {OpenStoreInstructions}
-                """, 15);
+                """, 30);
 
             ev.DamageHandler.Attacker = null;
-            AdjustKarma(ev.Attacker, 20);
+            AdjustKarma(ev.Attacker, 5);
         }
-
-        if (ev.Player.Role.Team == Team.ChaosInsurgency)
+        else if (ev.Player.Role.Team == Team.ChaosInsurgency)
         {
             foreach (Player detective in Detectives)
             {
@@ -343,12 +392,10 @@ internal class TroubleInLC : IGameMode
                 detective.ShowHint($"""
                     You got {config.TttCiDyingReward} credits because a Traitor died.
                     {OpenStoreInstructions}
-                    """, 15);
+                    """, 30);
             }
-            AdjustKarma(ev.Attacker, 40);
+            AdjustKarma(ev.Attacker, 10);
         }
-
-        Killers[ev.Player] = ev.Attacker;
     }
 
     public void OnHurting(HurtingEventArgs ev)
@@ -375,7 +422,14 @@ internal class TroubleInLC : IGameMode
     public void OnSpawned(SpawnedEventArgs ev)
     {
         if (TrackedPlayers.Contains(ev.Player))
+        {
+            if (ev.Player.Role.Team == Team.SCPs)
+            {
+                ev.Player.Health = 1;
+            }
+
             return;
+        }
 
         TrackedPlayers.Add(ev.Player);
         SetupScientist(ev.Player);
@@ -403,4 +457,24 @@ internal class TroubleInLC : IGameMode
     };
 
     public float DamageMultiplierFromKarma(Player player) => Math.Min(1f, (float)GetKarma(player) / DefaultKarma);
+
+    public void UpdateLights()
+    {
+        var detectorCd = (DateTime.Now - LastDetection).TotalSeconds;
+        var lightColor = Color.white;
+        if (detectorCd >= TraitorDetectorCooldown.TotalSeconds)
+        {
+            lightColor = Color.green;
+        }
+        else if (detectorCd < 15)
+        {
+            lightColor = DetectedTraitor ? Color.red : Color.blue;
+        }
+
+        if (lightColor != IntakeLight.Color)
+        {
+            IntakeLight.Color = lightColor;
+            OutputLight.Color = lightColor;
+        }
+    }
 }

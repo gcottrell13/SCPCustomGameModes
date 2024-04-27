@@ -85,7 +85,7 @@ namespace CustomGameModes
         {
             if (!IsLobby) return;
 
-            ev.Player.Broadcast(new($"Next game is {CurrentGame?.Name}", 100), true);
+            ev.Player.Broadcast(new($"<size=20>Next game is</size> {CurrentGame?.Name}", 100), true);
         }
 
         private void OnRoundEnded(RoundEndedEventArgs @event)
@@ -138,7 +138,7 @@ namespace CustomGameModes
                 foreach (var player in Player.List)
                 {
                     player.Broadcast(new($"""
-                        Next game is {CurrentGame.Name}
+                        <size=20>Next game is</size> {CurrentGame.Name}
                         <size={CustomGameModes.Singleton.Config.PregameRoundInstructionSize}>{CurrentGame.PreRoundInstructions}</size>
                         """, 11), true);
                 }

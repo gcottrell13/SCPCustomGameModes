@@ -3,6 +3,7 @@ using CustomGameModes.GameModes;
 using Exiled.API.Features;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -15,13 +16,13 @@ internal class TTTBuyItemCommand : ICommand
     public const string CommandName = "ttt-buy";
     public string Command => CommandName;
 
-    public string[] Aliases => Array.Empty<string>();
+    public string[] Aliases => new[] { "ttt" };
 
     public string Description => "Buy an item in TTT";
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
-        if (EventHandlers.CurrentGame is not TroubleInLC ttt || !Round.IsStarted)
+        if (EventHandlers.CurrentGame is not TroubleInLC ttt)
         {
             response = "We are not currently playing this game.";
             return false;
@@ -30,14 +31,15 @@ internal class TTTBuyItemCommand : ICommand
         var player = Player.Get(sender);
         var store = CustomGameModes.Singleton.Config.TttStore;
         var choices = string.Join("\n", store.Select(kvp => $"{kvp.Key}: {kvp.Value} credits"));
-        var balance = ttt.Credits.TryGetValue(player, out var b) ? b : 0;
+        var balance = ttt.GetCredits(player);
 
         var didntBuyMessage = $"""
             Your balance: {balance} credits
-            Type: <color=blue>.{CommandName} [item name]</color> to buy an item.
+            Use <color=blue>.{CommandName} [partial item name]</color> to buy an item.
             The store:
             {choices}
             """;
+        var errmsg = "";
         
         if (arguments.Count != 1)
         {
@@ -53,24 +55,35 @@ internal class TTTBuyItemCommand : ICommand
             if (storeItem.ToString().ToLower().StartsWith(enteredString))
             {
                 enteredItem = storeItem;
-                break;
+                goto FoundItem;
             }
         }
-
-        if (enteredItem == ItemType.None)
+        foreach (var storeItem in store.Keys)
         {
-            response = $"Invalid item.\n\n{didntBuyMessage}";
-            return false;
+            if (storeItem.ToString().ToLower().Contains(enteredString))
+            {
+                enteredItem = storeItem;
+                goto FoundItem;
+            }
         }
-        if (store.TryGetValue(enteredItem, out var cost) && cost <= balance)
+        errmsg = "Could not find item";
+        goto Error;
+
+    FoundItem:
+
+        if (store.TryGetValue(enteredItem, out var cost) && cost > balance)
         {
-            ttt.Credits[player] -= cost;
-            player.AddItem(enteredItem);
-            response = $"Bought {enteredItem} for {cost} credits";
-            return true;
+            errmsg = $"Insufficient funds for {enteredItem}";
+            goto Error;
         }
 
-        response = $"Could not buy item {enteredItem}.\n\n{didntBuyMessage}";
+        ttt.AddCredits(player, -cost);
+        player.AddItem(enteredItem);
+        response = $"Bought {enteredItem} for {cost} credits";
+        return true;
+
+    Error:
+        response = $"\n<color=red>{errmsg}</color>\n\n{didntBuyMessage}";
         return false;
     }
 }

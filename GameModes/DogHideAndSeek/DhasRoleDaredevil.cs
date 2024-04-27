@@ -26,6 +26,9 @@ namespace CustomGameModes.GameModes
 
         private HashSet<Room> GhostlightsThrown = new();
 
+        private Room? LastRoomThrownGhostlight;
+        private float GhostLightCooldownPenalty = 0f;
+
         public override RoleTypeId RoleType => RoleTypeId.ClassD;
 
         bool givingGhostlight = false;
@@ -83,7 +86,14 @@ namespace CustomGameModes.GameModes
                 if (!givingGhostlight)
                 {
                     givingGhostlight = true;
-                    Timing.CallDelayed(10f, () =>
+                    if (LastRoomThrownGhostlight == player.CurrentRoom)
+                        GhostLightCooldownPenalty += 2f;
+                    else
+                        GhostLightCooldownPenalty = 0;
+
+                    LastRoomThrownGhostlight = player.CurrentRoom;
+
+                    Timing.CallDelayed(10f + GhostLightCooldownPenalty, () =>
                     {
                         givingGhostlight = false;
                         player.CurrentItem = player.AddItem(ItemType.SCP2176);

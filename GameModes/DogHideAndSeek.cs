@@ -194,21 +194,11 @@ namespace CustomGameModes.GameModes
             {
                 return;
             }
-            else if (Manager.ClaimedPickups.TryGetValue(ev.Pickup, out var assignedPlayer) && ev.Player != assignedPlayer)
+            
+            if (Manager.ClaimedPickups.TryGetValue(ev.Pickup, out var assignedPlayer))
             {
-                DeniableEvent(ev);
-            }
-            else if (ev.Pickup.PreviousOwner == ev.Player)
-            {
-                // allow it
-            }
-            else if (ev.Pickup.Type.IsAmmo() || ev.Pickup.Type.IsWeapon())
-            {
-                // allow it
-            }
-            else
-            {
-                DeniableEvent(ev);
+                if (ev.Player != assignedPlayer)
+                    DeniableEvent(ev);
             }
         }
 
