@@ -1,4 +1,4 @@
-﻿using Exiled.API.Enums;
+using Exiled.API.Enums;
 using Exiled.API.Extensions;
 using Exiled.API.Features;
 using Exiled.Events.EventArgs.Interfaces;
@@ -35,7 +35,8 @@ internal class TroubleInLC : IGameMode
 
     public string PreRoundInstructions => "Hidden <color=green>Traitors</color>, No Elevators, 914 on Rough hurts but reveals <color=green>Traitors</color>";
 
-    public const string OpenStoreInstructions = $"Use ALT to buy items.";
+    public const string OpenStoreInstructions = "Use ALT to buy items.";
+    public const string StoreCycleInstructions = "Press ALT to cycle menu\n";
 
     public HashSet<Player> TrackedPlayers;
     public HashSet<Player> DamagedATeammate;
@@ -56,8 +57,6 @@ internal class TroubleInLC : IGameMode
     private bool DidResetDetector;
 
     private CoroutineHandle coroutineHandle;
-
-    public int ScpTraitorWaitTime = 60;
 
     private Config config;
 
@@ -163,7 +162,18 @@ internal class TroubleInLC : IGameMode
 
         foreach (var player in Player.List)
         {
-            Pickup.CreateAndSpawn(ItemType.GunCOM15, RoleTypeId.Scientist.GetRandomSpawnLocation().Position + Vector3.up, default);
+            Pickup.CreateAndSpawn(
+                ItemType.GunCOM15, 
+                RoleTypeId.Scientist.GetRandomSpawnLocation().Position + Vector3.up + Vector3.back * UnityEngine.Random.Range(-1, 1) + Vector3.left * UnityEngine.Random.Range(-1, 1), 
+                default);
+        }
+
+        float lockTime = 30;
+        CountdownHelper.AddCountdownForAll("Class-D Door Opens in:", TimeSpan.FromSeconds(lockTime));
+        foreach (var door in Room.Get(RoomType.LczClassDSpawn).Doors)
+        {
+            if (door.Rooms.Count == 2)
+                door.Lock(lockTime, DoorLockType.Regular079);
         }
 
         while (Round.InProgress)
@@ -182,11 +192,6 @@ internal class TroubleInLC : IGameMode
                 if (player.Zone != ZoneType.LightContainment)
                 {
                     player.Position = RoleTypeId.Scientist.GetRandomSpawnLocation().Position;
-                }
-
-                if (player.IsScp && !PlayerHintMenu.ByPlayerDict.ContainsKey(player) && Round.ElapsedTime.TotalSeconds < ScpTraitorWaitTime)
-                {
-                    player.ShowHint($"You may start attacking in: {ScpTraitorWaitTime - (int)Round.ElapsedTime.TotalSeconds} seconds", updateInterval + 1f);
                 }
             }
 
@@ -234,7 +239,7 @@ internal class TroubleInLC : IGameMode
                         {
                             player.Role.Set(RoleTypeId.ChaosRepressor, RoleSpawnFlags.None);
                         }
-                        else if (player.Role.Type switch { RoleTypeId.Scp049 | RoleTypeId.Scp096 | RoleTypeId.Scp079 | RoleTypeId.Scp173 => true, _ => false})
+                        else if (player.Role.Type switch { RoleTypeId.Scp049 | RoleTypeId.Scp096 | RoleTypeId.Scp079 | RoleTypeId.Scp173 | RoleTypeId.Scp049 => true, _ => false})
                         {
                             player.Role.Set(RoleTypeId.Scp939, RoleSpawnFlags.None);
                         }
@@ -290,16 +295,29 @@ internal class TroubleInLC : IGameMode
         ci.AddItem(ItemType.KeycardScientist);
         ci.AddItem(ItemType.Medkit);
         ci.AddItem(ItemType.Flashlight);
-        ci.ShowHint($"""
-                    You are a Traitor! Kill all the Innocents (<color=yellow>Scientists</color>).
-                    You can earn shop credits by killing Innocents (starting {GetCredits(ci)} credits).
-                    {OpenStoreInstructions}
-                    """, 30);
         ShowBaseKarmaOnPlayer(ci);
         ci.ChangeAppearance(RoleTypeId.Scientist, scientists);
         if (ci.IsScp)
         {
             ci.VoiceChannel = VoiceChat.VoiceChatChannel.Proximity;
+            ci.ShowHint($"""
+                    You are an SCP Traitor! Kill all the Innocents (<color=yellow>Scientists</color>).
+                    You can earn shop credits by killing Innocents (starting {GetCredits(ci)} credits).
+
+                    Be wary of using <color=red>SCP Abilities</color> where the Innocents can see you!
+                    <color=red>SCP Attacks</color> won't do damage unless you have obtained a weapon.
+                    Use the Store to pick up nearby items.
+
+                    {OpenStoreInstructions}
+                    """, 45);
+        }
+        else
+        {
+            ci.ShowHint($"""
+                    You are a Traitor! Kill all the Innocents (<color=yellow>Scientists</color>).
+                    You can earn shop credits by killing Innocents (starting {GetCredits(ci)} credits).
+                    {OpenStoreInstructions}
+                    """, 45);
         }
     }
 
@@ -311,17 +329,17 @@ internal class TroubleInLC : IGameMode
 
         if (Detectives.Contains(scientist))
         {
-            Credits[scientist] = config.TttTraitorStartCredits;
+            Credits[scientist] = config.TttDetectiveStartCredits;
             scientist.ShowHint($"""
                 You are a Detective! You can discover a body's killer.
                 You can earn shop credits when a Traitor dies (starting {GetCredits(scientist)} credits).
                 {OpenStoreInstructions}
-                """, 30);
+                """, 45);
         }
         else
         {
             scientist.ShowHint($"""
-                You are an Innocent! Avoid dying, and shoot Traitors!
+                You are an Innocent! Avoid dying, and work together to shoot Traitors!
                 """, 30);
         }
         ShowBaseKarmaOnPlayer(scientist);
@@ -441,8 +459,9 @@ internal class TroubleInLC : IGameMode
         if (ev.Player == null || ev.Attacker == null)
             return;
 
-        if (ev.Attacker.IsScp && Round.ElapsedTime.TotalSeconds < ScpTraitorWaitTime)
+        if (ev.Attacker.IsScp && !ev.Attacker.Items.Any(x => x.IsWeapon))
         {
+            ev.Attacker.ShowHint("You cannot use SCP Attacks unless you have a weapon in your inventory");
             ev.IsAllowed = false;
             return;
         }
@@ -471,7 +490,11 @@ internal class TroubleInLC : IGameMode
 
     public IEnumerator<float> OnSpawned(SpawnedEventArgs ev)
     {
-        if (TrackedPlayers.Contains(ev.Player))
+        if (ev.Player.Role.Type == RoleTypeId.Spectator)
+        {
+            yield break;
+        }
+        else if (TrackedPlayers.Contains(ev.Player))
         {
             if (ev.Player.Role != RoleTypeId.Scientist)
             {
@@ -505,7 +528,7 @@ internal class TroubleInLC : IGameMode
             menu.Next();
             var current = menu.GetCurrent();
             if (current != null)
-                menu.CountdownToSelect($"{current.ActionName} in: ", timeToWaitForSelection);
+                menu.CountdownToSelect($"{StoreCycleInstructions}{current.ActionName} in: ", timeToWaitForSelection);
         }
         else
         {
@@ -639,7 +662,7 @@ internal class TroubleInLC : IGameMode
             }
 
             menu = new PlayerHintMenu(ev.Player, list);
-            menu.CountdownToSelect("Closing Menu In: ", 10);
+            menu.CountdownToSelect($"{StoreCycleInstructions}Closing Menu In: ", 10);
         }
     }
 

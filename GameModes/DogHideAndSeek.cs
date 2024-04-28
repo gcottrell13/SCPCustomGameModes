@@ -94,7 +94,7 @@ namespace CustomGameModes.GameModes
 
         public void OnRoundEnd()
         {
-            Log.Info("Stopping Game");
+            Log.Info("Stopping DHAS Game");
 
             // -------------------------------------------------------------
             // Event Handlers

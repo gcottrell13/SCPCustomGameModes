@@ -43,14 +43,18 @@ internal class PlayerHintMenu
     public void Next()
     {
         var startIndex = currentIndex;
-        do
+        while (true)
         {
             currentIndex++;
             if (currentIndex >= Items.Count)
             {
                 currentIndex = -1;
             }
-        } while (currentIndex != startIndex && (currentIndex == -1 || Items[currentIndex].OnSelect == null));
+            if (currentIndex == startIndex)
+                break;
+            if (currentIndex >= 0 && Items[currentIndex].OnSelect != null)
+                break;
+        };
     }
 
     public void CountdownToSelect(string text, float seconds)

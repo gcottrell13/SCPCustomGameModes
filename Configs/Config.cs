@@ -81,5 +81,8 @@ namespace CustomGameModes.Configs
 
         [Description("TTT Traitor starting credits")]
         public int TttTraitorStartCredits { get; set; } = 1;
+
+        [Description("TTT Detective starting credits")]
+        public int TttDetectiveStartCredits { get; set; } = 1;
     }
 }
