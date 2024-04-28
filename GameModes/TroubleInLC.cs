@@ -1,7 +1,6 @@
 ﻿using Exiled.API.Enums;
 using Exiled.API.Extensions;
 using Exiled.API.Features;
-using Exiled.API.Structs;
 using Exiled.Events.EventArgs.Interfaces;
 using Exiled.Events.EventArgs.Player;
 using Exiled.Events.EventArgs.Scp914;
@@ -17,13 +16,10 @@ using System.Linq;
 using Exiled.Events.EventArgs.Map;
 using Exiled.API.Features.Items;
 using CustomGameModes.Configs;
-using CustomGameModes.Commands;
 using CustomGameModes.API;
-using Exiled.API.Features.DamageHandlers;
-using PlayerStatsSystem;
-using PluginAPI.Roles;
 using Scp914;
 using UnityEngine;
+using Exiled.API.Features.Pickups;
 
 namespace CustomGameModes.GameModes;
 
@@ -39,7 +35,7 @@ internal class TroubleInLC : IGameMode
 
     public string PreRoundInstructions => "Hidden <color=green>Traitors</color>, No Elevators, 914 on Rough hurts but reveals <color=green>Traitors</color>";
 
-    public const string OpenStoreInstructions = $"Use <color=blue>~</color> and type <color=blue>.{TTTBuyItemCommand.CommandName}</color> to buy items.";
+    public const string OpenStoreInstructions = $"Use ALT to buy items.";
 
     public HashSet<Player> TrackedPlayers;
     public HashSet<Player> DamagedATeammate;
@@ -54,11 +50,14 @@ internal class TroubleInLC : IGameMode
     private TimeSpan TraitorDetectorCooldown = TimeSpan.FromMinutes(2);
     DateTime LastDetection = DateTime.MinValue;
 
-    private Exiled.API.Features.Toys.Light IntakeLight;
-    private Exiled.API.Features.Toys.Light OutputLight;
+    private Exiled.API.Features.Toys.Light? IntakeLight;
+    private Exiled.API.Features.Toys.Light? OutputLight;
     private bool DetectedTraitor;
+    private bool DidResetDetector;
 
     private CoroutineHandle coroutineHandle;
+
+    public int ScpTraitorWaitTime = 60;
 
     private Config config;
 
@@ -74,6 +73,7 @@ internal class TroubleInLC : IGameMode
         RevealedBodies = new HashSet<Ragdoll>();
         LastDetection = DateTime.MinValue;
         DetectedTraitor = false;
+        DidResetDetector = false;
     }
 
     ~TroubleInLC()
@@ -122,6 +122,8 @@ internal class TroubleInLC : IGameMode
         PlayerEvent.Spawned += OnSpawned;
         PlayerEvent.Dying += OnDying;
         PlayerEvent.Hurting += OnHurting;
+        PlayerEvent.TogglingNoClip += OnToggleNoclip;
+        PlayerEvent.UsedItem += OnUseItem;
 
         Scp914Event.UpgradingPlayer += OnUpgradingPlayer;
 
@@ -141,6 +143,8 @@ internal class TroubleInLC : IGameMode
         PlayerEvent.Spawned -= OnSpawned;
         PlayerEvent.Dying -= OnDying;
         PlayerEvent.Hurting -= OnHurting;
+        PlayerEvent.TogglingNoClip -= OnToggleNoclip;
+        PlayerEvent.UsedItem -= OnUseItem;
 
         Scp914Event.UpgradingPlayer -= OnUpgradingPlayer;
 
@@ -155,11 +159,23 @@ internal class TroubleInLC : IGameMode
     private IEnumerator<float> roundCoroutine()
     {
         yield return Timing.WaitForOneFrame;
+        float updateInterval = 1f;
+
+        foreach (var player in Player.List)
+        {
+            Pickup.CreateAndSpawn(ItemType.GunCOM15, RoleTypeId.Scientist.GetRandomSpawnLocation().Position + Vector3.up, default);
+        }
 
         while (Round.InProgress)
         {
-            yield return Timing.WaitForSeconds(1f);
+            yield return Timing.WaitForSeconds(updateInterval);
             UpdateLights();
+
+            if (DateTime.Now - LastDetection > TraitorDetectorCooldown && !DidResetDetector)
+            {
+                DetectedTraitor = false;
+                DidResetDetector = true;
+            }
 
             foreach (Player player in Player.List)
             {
@@ -167,11 +183,15 @@ internal class TroubleInLC : IGameMode
                 {
                     player.Position = RoleTypeId.Scientist.GetRandomSpawnLocation().Position;
                 }
+
+                if (player.IsScp && !PlayerHintMenu.ByPlayerDict.ContainsKey(player) && Round.ElapsedTime.TotalSeconds < ScpTraitorWaitTime)
+                {
+                    player.ShowHint($"You may start attacking in: {ScpTraitorWaitTime - (int)Round.ElapsedTime.TotalSeconds} seconds", updateInterval + 1f);
+                }
             }
 
             try
             {
-
                 foreach (Player detective in Detectives)
                 {
                     if (!detective.IsAlive)
@@ -210,7 +230,14 @@ internal class TroubleInLC : IGameMode
             {
                 case Team.SCPs:
                     {
-                        player.Role.Set(RoleTypeId.ChaosRepressor, RoleSpawnFlags.None);
+                        if (UnityEngine.Random.Range(0, 101) > 20)
+                        {
+                            player.Role.Set(RoleTypeId.ChaosRepressor, RoleSpawnFlags.None);
+                        }
+                        else if (player.Role.Type switch { RoleTypeId.Scp049 | RoleTypeId.Scp096 | RoleTypeId.Scp079 | RoleTypeId.Scp173 => true, _ => false})
+                        {
+                            player.Role.Set(RoleTypeId.Scp939, RoleSpawnFlags.None);
+                        }
                         troublemakers.Add(player);
                         break;
                     }
@@ -260,23 +287,25 @@ internal class TroubleInLC : IGameMode
     {
         Credits[ci] = config.TttTraitorStartCredits;
         ci.Position = RoleTypeId.ClassD.GetRandomSpawnLocation().Position;
-        ci.AddItem(FirearmType.Com15, new AttachmentIdentifier[] { });
         ci.AddItem(ItemType.KeycardScientist);
         ci.AddItem(ItemType.Medkit);
         ci.AddItem(ItemType.Flashlight);
         ci.ShowHint($"""
-                    You are a Traitor! Kill everyone who isn't Chaos Insurgency.
+                    You are a Traitor! Kill all the Innocents (<color=yellow>Scientists</color>).
                     You can earn shop credits by killing Innocents (starting {GetCredits(ci)} credits).
                     {OpenStoreInstructions}
                     """, 30);
         ShowBaseKarmaOnPlayer(ci);
         ci.ChangeAppearance(RoleTypeId.Scientist, scientists);
+        if (ci.IsScp)
+        {
+            ci.VoiceChannel = VoiceChat.VoiceChatChannel.Proximity;
+        }
     }
 
     public void SetupScientist(Player scientist)
     {
         scientist.Role.Set(RoleTypeId.Scientist);
-        scientist.AddItem(FirearmType.Com15, new AttachmentIdentifier[] { });
         scientist.Position = RoleTypeId.ClassD.GetRandomSpawnLocation().Position;
         scientist.AddItem(ItemType.Flashlight);
 
@@ -339,22 +368,31 @@ internal class TroubleInLC : IGameMode
         ev.IsAllowed = false;
     }
 
+    public void OnUseItem(UsedItemEventArgs ev)
+    {
+        if (ev.Player.IsScp && ev.Item.Type == ItemType.Medkit)
+        {
+            ev.Player.Heal(ev.Player.MaxHealth / 2);
+        }
+    }
+
     public void OnUpgradingPlayer(UpgradingPlayerEventArgs ev)
     {
         if (ev.KnobSetting == Scp914KnobSetting.Rough)
         {
             if (DateTime.Now - LastDetection > TraitorDetectorCooldown)
             {
+                DidResetDetector = false;
                 ev.Player.Health /= 2;
-                if (ev.Player.IsCHI)
+                if (ev.Player.Role != RoleTypeId.Scientist)
                 {
                     DetectedTraitor = true;
                     foreach (Player player in Player.List)
                     {
-                        player.ShowHint("There is at least one <color=green>Traitor</color> in SCP 914");
+                        player.ShowHint("There is at least one <color=green>Traitor</color> in SCP 914", 10);
                     }
                 }
-                LastDetection = DateTime.Now;
+                LastDetection = DateTime.Now - TimeSpan.FromSeconds(1);
                 UpdateLights();
             }
         }
@@ -371,7 +409,7 @@ internal class TroubleInLC : IGameMode
         {
             AdjustKarma(ev.Attacker, -GetKarma(ev.Player) / 10);
         }
-        else if (ev.Attacker.Role.Team == Team.ChaosInsurgency)
+        else if (ev.Attacker.Role.Team != Team.FoundationForces)
         {
             var reward = Detectives.Contains(ev.Player) ? config.TttKillInnocentReward * 2 : config.TttKillInnocentReward;
 
@@ -384,7 +422,7 @@ internal class TroubleInLC : IGameMode
             ev.DamageHandler.Attacker = null;
             AdjustKarma(ev.Attacker, 5);
         }
-        else if (ev.Player.Role.Team == Team.ChaosInsurgency)
+        else if (ev.Player.Role.Team != Team.FoundationForces)
         {
             foreach (Player detective in Detectives)
             {
@@ -403,7 +441,19 @@ internal class TroubleInLC : IGameMode
         if (ev.Player == null || ev.Attacker == null)
             return;
 
+        if (ev.Attacker.IsScp && Round.ElapsedTime.TotalSeconds < ScpTraitorWaitTime)
+        {
+            ev.IsAllowed = false;
+            return;
+        }
+
+        if (ev.Player.IsScp)
+        {
+            ev.Amount = ev.Player.MaxHealth / 5;
+        }
+
         ev.Amount *= DamageMultiplierFromKarma(ev.Attacker);
+
         if (ev.Player.Role.Team == ev.Attacker.Role.Team)
         {
             DamagedATeammate.Add(ev.Attacker);
@@ -413,34 +463,183 @@ internal class TroubleInLC : IGameMode
 
     public void OnJoin(JoinedEventArgs ev)
     {
-        foreach (Player player in Player.Get(Team.ChaosInsurgency))
+        foreach (Player player in Player.Get(x => x.Role != RoleTypeId.Scientist))
         {
             player.ChangeAppearance(RoleTypeId.Scientist, new[] { ev.Player });
         }
     }
 
-    public void OnSpawned(SpawnedEventArgs ev)
+    public IEnumerator<float> OnSpawned(SpawnedEventArgs ev)
     {
         if (TrackedPlayers.Contains(ev.Player))
         {
-            if (ev.Player.Role.Team == Team.SCPs)
+            if (ev.Player.Role != RoleTypeId.Scientist)
             {
-                ev.Player.Health = 1;
+                Log.Debug($"{ev.Player.DisplayNickname} spawned as {ev.Player.Role.Type}, setting appearance to scientist");
+                yield return Timing.WaitForSeconds(0.5f);
+                ev.Player.ChangeAppearance(RoleTypeId.Scientist, scientists);
             }
-
-            return;
         }
-
-        TrackedPlayers.Add(ev.Player);
-        SetupScientist(ev.Player);
+        else
+        {
+            TrackedPlayers.Add(ev.Player);
+            SetupScientist(ev.Player);
+        }
     }
 
     public void OnDecontaminating(DecontaminatingEventArgs ev)
     {
         ev.IsAllowed = false;
-        foreach (Player player in Player.Get(Team.ChaosInsurgency))
+        foreach (Player player in Player.Get(x => x.Role != RoleTypeId.Scientist))
         {
             player.Role.Set(RoleTypeId.Spectator);
+        }
+    }
+
+    public IEnumerator<float> OnToggleNoclip(TogglingNoClipEventArgs ev)
+    {
+        yield return Timing.WaitForOneFrame;
+        if (PlayerHintMenu.ByPlayerDict.TryGetValue(ev.Player, out var menu))
+        {
+            var timeToWaitForSelection = 1f;
+            menu.Next();
+            var current = menu.GetCurrent();
+            if (current != null)
+                menu.CountdownToSelect($"{current.ActionName} in: ", timeToWaitForSelection);
+        }
+        else
+        {
+            List<HintMenuItem> list = new List<HintMenuItem>();
+
+            if (ev.Player.IsScp)
+            {
+                list.Add(new HintMenuItem(text: () => "Your Inventory:\n-"));
+                if (ev.Player.Items.Count < 8)
+                {
+                    if (getClosePickup(ev.Player) is Pickup closestPickup)
+                    {
+                        list.Add(new HintMenuItem(
+                            actionName: $"Pick up item",
+                            text: () =>
+                            {
+                                closestPickup = getClosePickup(ev.Player);
+                                return ColorHelper.Color(Misc.PlayerInfoColorTypes.Emerald, $"Pick up {closestPickup?.Type}");
+                            },
+                            onSelect: () =>
+                            {
+                                if (closestPickup?.IsSpawned == true)
+                                {
+                                    ev.Player.AddItem(closestPickup);
+                                    closestPickup.UnSpawn();
+                                    return "Picked up item";
+                                }
+                                return "Item is gone";
+                            }
+                        ));
+                    }
+                }
+                if (ev.Player.CurrentItem != null)
+                {
+                    list.Add(new HintMenuItem(
+                        actionName: $"Stow {ev.Player.CurrentItem.Type}",
+                        text: () => ColorHelper.Color(Misc.PlayerInfoColorTypes.BlueGreen, $"Stow {ev.Player.CurrentItem.Type}"),
+                        onSelect: () =>
+                        {
+                            ev.Player.CurrentItem = null;
+                            return $"Put Away Item";
+                        }
+                    ));
+                    list.Add(new HintMenuItem(
+                        actionName: $"Drop {ev.Player.CurrentItem.Type}",
+                        text: () => ColorHelper.Color(Misc.PlayerInfoColorTypes.BlueGreen, $"Drop {ev.Player.CurrentItem.Type}"),
+                        onSelect: () =>
+                        {
+                            ev.Player.DropItem(ev.Player.CurrentItem);
+                            return $"Dropped Item";
+                        }
+                    ));
+                }
+
+                // show inventory
+                foreach (Item item in ev.Player.Items)
+                {
+                    var thisItem = item;
+                    if (item == ev.Player.CurrentItem)
+                        continue;
+                    list.Add(new HintMenuItem(
+                        actionName: $"Select {thisItem.Type}",
+                        text: () => ColorHelper.Color(Misc.PlayerInfoColorTypes.Yellow, thisItem.Type.ToString()),
+                        onSelect: () =>
+                        {
+                            ev.Player.CurrentItem = thisItem;
+                            return $"Switched to {thisItem.Type}";
+                        }
+                    ));
+                    //list.Add(new HintMenuItem(
+                    //    actionName: $"Drop {thisItem.Type}",
+                    //    text: () => $"Drop {thisItem.Type}",
+                    //    onSelect: () =>
+                    //    {
+                    //        ev.Player.DropItem(thisItem);
+                    //        return $"Dropped Item";
+                    //    }
+                    //));
+                }
+
+                list.Last().ColumnBreakAfter = true;
+            }
+
+            list.Add(new HintMenuItem(
+                text: () =>
+                {
+                    var store = config.TttStore;
+                    var balance = GetCredits(ev.Player);
+                    return $"""
+                        Your balance: {balance} credits
+                        -
+                        """;
+                }));
+
+            var shopItemCount = 0;
+            foreach (var shopItem in config.TttStore)
+            {
+                shopItemCount++;
+                var name = shopItem.Key;
+                var cost = shopItem.Value;
+                list.Add(new HintMenuItem(
+                    actionName: $"Buy {name}",
+                    text: () =>
+                    {
+                        var credits = GetCredits(ev.Player);
+                        var text = $"{name} - {cost} credits";
+                        if (credits < cost)
+                        {
+                            text = $"<color=red>{text}</color>";
+                        }
+                        return text;
+                    }, 
+                    onSelect: () =>
+                    {
+                        var credits = GetCredits(ev.Player);
+                        if (credits >= cost)
+                        {
+                            AddCredits(ev.Player, -cost);
+                            var newItem = ev.Player.AddItem(name);
+                            if (!ev.Player.IsScp)
+                                return $"Bought {name}";
+                            ev.Player.CurrentItem = newItem;
+                            return $"Bought {name} - Access Inventory with TAB";
+                        }
+                        return "Insufficient funds";
+                    }
+                )
+                {
+                    ColumnBreakAfter = shopItemCount % 6 == 0,
+                });
+            }
+
+            menu = new PlayerHintMenu(ev.Player, list);
+            menu.CountdownToSelect("Closing Menu In: ", 10);
         }
     }
 
@@ -460,13 +659,15 @@ internal class TroubleInLC : IGameMode
 
     public void UpdateLights()
     {
+        if (IntakeLight == null || OutputLight == null)
+            return;
         var detectorCd = (DateTime.Now - LastDetection).TotalSeconds;
         var lightColor = Color.white;
         if (detectorCd >= TraitorDetectorCooldown.TotalSeconds)
         {
             lightColor = Color.green;
         }
-        else if (detectorCd < 15)
+        else if (detectorCd < TraitorDetectorCooldown.TotalSeconds / 2)
         {
             lightColor = DetectedTraitor ? Color.red : Color.blue;
         }
@@ -476,5 +677,16 @@ internal class TroubleInLC : IGameMode
             IntakeLight.Color = lightColor;
             OutputLight.Color = lightColor;
         }
+    }
+
+    private Pickup? getClosePickup(Player player)
+    {
+        var closestPickup = player.CurrentRoom.Pickups
+            .Where(x => x.IsSpawned)
+            .OrderBy(x => (x.Position - player.Position).sqrMagnitude)
+            .FirstOrDefault();
+        if (closestPickup == null)
+            return null;
+        return (closestPickup.Position - player.Position).sqrMagnitude < 10 ? closestPickup : null;
     }
 }
