@@ -15,7 +15,7 @@ namespace CustomGameModes
 {
     internal class EventHandlers
     {
-        public static IGameMode CurrentGame;
+        public static IGameMode? CurrentGame;
         public static bool IsLobby => !Round.IsStarted && !Round.IsEnded;
 
         CoroutineHandle DisplayCurrentGame;

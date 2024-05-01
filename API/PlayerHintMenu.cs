@@ -74,6 +74,7 @@ internal class PlayerHintMenu
                 var longestStrInColumn = new List<float>() { 0 };
                 var colIndex = 0;
                 var itemNumber = 0;
+                var cursor = ColorHelper.Color(Misc.PlayerInfoColorTypes.Magenta, selectorId);
                 foreach (var item in Items)
                 {
                     var itemText = item.Text();
@@ -84,8 +85,8 @@ internal class PlayerHintMenu
                         {
                             rows.Add(new(new string[colIndex]));
                         }
-                        var str = $"{(item == current ? selectorId : selectorPadding)}{number}{line}".Replace("\n", "");
-                        var withoutTags = CharacterLengths.StringSize(stripTagsRegex.Replace(str, ""));
+                        var str = $"{(item == current ? cursor : selectorPadding)}{number}{line}".Replace("\n", "");
+                        var withoutTags = CharacterLengths.StringSize(str.Contains("</") ? stripTagsRegex.Replace(str, "") : str);
                         if (withoutTags > longestStrInColumn[colIndex])
                             longestStrInColumn[colIndex] = withoutTags;
                         rows[rowIndex].Add(str);
@@ -104,7 +105,7 @@ internal class PlayerHintMenu
                     while (row.Count <= colIndex) row.Add("");
                     var ret = string.Join("  ", row.Select((item, index) =>
                     {
-                        var str = CharacterLengths.StringSize(item == null ? "" : item.Contains("<") ? stripTagsRegex.Replace(item, "") : item);
+                        var str = CharacterLengths.StringSize(item == null ? "" : item.Contains("</") ? stripTagsRegex.Replace(item, "") : item);
                         var diff = longestStrInColumn[index] - str;
                         return (item ?? "") + new string(' ', (int)(diff / CharacterLengths.Lengths[' ']));
                     }));

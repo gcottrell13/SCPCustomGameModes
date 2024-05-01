@@ -15,15 +15,20 @@ namespace CustomGameModes
 
     internal class CustomGameModes : Plugin<Config, Translation>
     {
-        public static CustomGameModes Singleton;
+        public static CustomGameModes? Singleton;
+        private Harmony? _harmony;
 
-        EventHandlers handlers;
+        EventHandlers? handlers;
 
         public override void OnEnabled()
         {
             Singleton = this;
             handlers = new EventHandlers();
             handlers.RegisterEvents();
+
+            _harmony = new Harmony($"gcottre-cgm-{DateTime.Now.Ticks}");
+            _harmony.PatchAll();
+
             base.OnEnabled();
         }
 
@@ -31,6 +36,7 @@ namespace CustomGameModes
         {
             Singleton = null;
             handlers?.UnregisterEvents();
+            _harmony?.UnpatchAll();
             base.OnDisabled();
         }
 

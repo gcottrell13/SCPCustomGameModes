@@ -1,6 +1,7 @@
 ﻿using Exiled.API.Features;
 using MEC;
 using PlayerRoles;
+using PlayerRoles.Spectating;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -46,8 +47,11 @@ namespace CustomGameModes.GameModes
         {
             while (player.IsDead)
             {
-                var spectating = OtherCrewmates.FirstOrDefault(p => p.CurrentSpectatingPlayers.Contains(player));
-                if (spectating == null) goto Loop;
+                yield return Timing.WaitForSeconds(1);
+                var spectating = Player.List.FirstOrDefault(p => p.ReferenceHub.IsSpectatedBy(player.ReferenceHub));
+
+                if (spectating == null)
+                    continue;
 
                 var theirHint = Manager.PlayerRoles[spectating].CurrentTaskHint;
 
@@ -58,9 +62,6 @@ namespace CustomGameModes.GameModes
                     """;
 
                 player.ShowHint(myHint, 2);
-
-            Loop:
-                yield return Timing.WaitForSeconds(1);
             }
         }
     }

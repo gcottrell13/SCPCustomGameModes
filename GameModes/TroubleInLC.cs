@@ -20,6 +20,7 @@ using CustomGameModes.API;
 using Scp914;
 using UnityEngine;
 using Exiled.API.Features.Pickups;
+using VoiceChat.Networking;
 
 namespace CustomGameModes.GameModes;
 
@@ -33,7 +34,7 @@ internal class TroubleInLC : IGameMode
 
     public string Name => "Trouble In Light Containment";
 
-    public string PreRoundInstructions => "Hidden <color=green>Traitors</color>, No Elevators, 914 on Rough hurts but reveals <color=green>Traitors</color>";
+    public string PreRoundInstructions => "Hidden <color=green>Traitors</color>, No Elevators, 914 on Rough reveals <color=green>Traitors</color>";
 
     public const string OpenStoreInstructions = "Use ALT to buy items.";
     public const string StoreCycleInstructions = "Press ALT to cycle menu\n";
@@ -67,7 +68,7 @@ internal class TroubleInLC : IGameMode
         DamagedATeammate = new HashSet<Player>();
         Credits = new Dictionary<Player, int>();
         Detectives = new HashSet<Player>();
-        config = CustomGameModes.Singleton.Config;
+        config = CustomGameModes.Singleton?.Config ?? new();
         Killers = new Dictionary<Player, Player>();
         RevealedBodies = new HashSet<Ragdoll>();
         LastDetection = DateTime.MinValue;
@@ -123,6 +124,7 @@ internal class TroubleInLC : IGameMode
         PlayerEvent.Hurting += OnHurting;
         PlayerEvent.TogglingNoClip += OnToggleNoclip;
         PlayerEvent.UsedItem += OnUseItem;
+        PlayerEvent.UsingItem += OnUsingItem;
 
         Scp914Event.UpgradingPlayer += OnUpgradingPlayer;
 
@@ -144,6 +146,7 @@ internal class TroubleInLC : IGameMode
         PlayerEvent.Hurting -= OnHurting;
         PlayerEvent.TogglingNoClip -= OnToggleNoclip;
         PlayerEvent.UsedItem -= OnUseItem;
+        PlayerEvent.UsingItem -= OnUsingItem;
 
         Scp914Event.UpgradingPlayer -= OnUpgradingPlayer;
 
@@ -239,7 +242,7 @@ internal class TroubleInLC : IGameMode
                         {
                             player.Role.Set(RoleTypeId.ChaosRepressor, RoleSpawnFlags.None);
                         }
-                        else if (player.Role.Type switch { RoleTypeId.Scp049 | RoleTypeId.Scp096 | RoleTypeId.Scp079 | RoleTypeId.Scp173 | RoleTypeId.Scp049 => true, _ => false})
+                        else if (player.Role.Type switch { RoleTypeId.Scp049 | RoleTypeId.Scp096 | RoleTypeId.Scp079 | RoleTypeId.Scp173 => true, _ => false})
                         {
                             player.Role.Set(RoleTypeId.Scp939, RoleSpawnFlags.None);
                         }
@@ -299,7 +302,6 @@ internal class TroubleInLC : IGameMode
         ci.ChangeAppearance(RoleTypeId.Scientist, scientists);
         if (ci.IsScp)
         {
-            ci.VoiceChannel = VoiceChat.VoiceChatChannel.Proximity;
             ci.ShowHint($"""
                     You are an SCP Traitor! Kill all the Innocents (<color=yellow>Scientists</color>).
                     You can earn shop credits by killing Innocents (starting {GetCredits(ci)} credits).
@@ -384,6 +386,14 @@ internal class TroubleInLC : IGameMode
     public void OnElevator(InteractingElevatorEventArgs ev)
     {
         ev.IsAllowed = false;
+    }
+
+    public void OnUsingItem(UsingItemEventArgs ev)
+    {
+        if (ev.Item.Type == ItemType.SCP1576)
+        {
+            ev.IsAllowed = false;
+        }
     }
 
     public void OnUseItem(UsedItemEventArgs ev)
@@ -492,6 +502,10 @@ internal class TroubleInLC : IGameMode
     {
         if (ev.Player.Role.Type == RoleTypeId.Spectator)
         {
+            foreach (var traitor in Player.Get(x => x.Role != RoleTypeId.Scientist))
+            {
+                traitor.ChangeAppearance(traitor.Role, new[] { ev.Player });
+            }
             yield break;
         }
         else if (TrackedPlayers.Contains(ev.Player))
@@ -634,15 +648,16 @@ internal class TroubleInLC : IGameMode
                     text: () =>
                     {
                         var credits = GetCredits(ev.Player);
-                        var text = $"{name} - {cost} credits";
-                        if (credits < cost)
-                        {
-                            text = $"<color=red>{text}</color>";
-                        }
+                        var color = credits >= cost ? "green" : "red";
+                        var text = $"{name} - <color={color}>{cost} credits</color>";
                         return text;
                     }, 
                     onSelect: () =>
                     {
+                        if (ev.Player.IsInventoryFull)
+                        {
+                            return $"Inventory full, could not buy {name}";
+                        }
                         var credits = GetCredits(ev.Player);
                         if (credits >= cost)
                         {
@@ -653,7 +668,7 @@ internal class TroubleInLC : IGameMode
                             ev.Player.CurrentItem = newItem;
                             return $"Bought {name} - Access Inventory with TAB";
                         }
-                        return "Insufficient funds";
+                        return $"Insufficient funds for {name}";
                     }
                 )
                 {

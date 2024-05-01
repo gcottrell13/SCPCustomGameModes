@@ -33,7 +33,7 @@ namespace CustomGameModes.GameModes.Normal
         }
 
         bool HasGivenScp5000 = false;
-        Player Scp5000Owner = null;
+        Player? Scp5000Owner = null;
         RoleTypeId Scp5000OwnerRole;
         int Scp5000Chance;
 
@@ -42,7 +42,7 @@ namespace CustomGameModes.GameModes.Normal
 
         public SCP5000Handler()
         {
-            Scp5000Chance = CustomGameModes.Singleton.Config.Scp5000Chance;
+            Scp5000Chance = CustomGameModes.Singleton?.Config.Scp5000Chance ?? 0;
         }
 
         ~SCP5000Handler()
