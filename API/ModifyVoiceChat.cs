@@ -13,7 +13,7 @@ internal static class ModifyVoiceChat
         {
             case TroubleInLC:
                 {
-                    if (listener.IsAlive() && listener.GetRoleId() != RoleTypeId.Scientist && listener.IsSpectatedBy(speaker))
+                    if (listener.GetRoleId() != RoleTypeId.Scientist)
                     {
                         return VoiceChatChannel.RoundSummary;
                     }
