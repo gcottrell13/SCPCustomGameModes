@@ -11,6 +11,7 @@ using PlayerEvent = Exiled.Events.Handlers.Player;
 using ServerEvent = Exiled.Events.Handlers.Server;
 using Scp914Event = Exiled.Events.Handlers.Scp914;
 using MapEvent = Exiled.Events.Handlers.Map;
+using WarheadEvent = Exiled.Events.Handlers.Warhead;
 using System;
 using System.Linq;
 using Exiled.Events.EventArgs.Map;
@@ -20,7 +21,7 @@ using CustomGameModes.API;
 using Scp914;
 using UnityEngine;
 using Exiled.API.Features.Pickups;
-using VoiceChat.Networking;
+using Exiled.Events.EventArgs.Warhead;
 
 namespace CustomGameModes.GameModes;
 
@@ -47,7 +48,10 @@ internal class TroubleInLC : IGameMode
     public HashSet<Ragdoll> RevealedBodies;
 
     public List<Player> scientists = new List<Player>();
-    public List<Player> troublemakers = new List<Player>();
+    public List<Player> traitors = new List<Player>();
+
+    public float ScpRevealToTargetSeconds = 5f; // the amount of time that SCP traitors should be revealed to their targets after damaging them
+    public Dictionary<Player, DateTime> LastAttack;
 
     private TimeSpan TraitorDetectorCooldown = TimeSpan.FromMinutes(2);
     DateTime LastDetection = DateTime.MinValue;
@@ -74,6 +78,7 @@ internal class TroubleInLC : IGameMode
         LastDetection = DateTime.MinValue;
         DetectedTraitor = false;
         DidResetDetector = false;
+        LastAttack = new Dictionary<Player, DateTime>();
     }
 
     ~TroubleInLC()
@@ -131,12 +136,14 @@ internal class TroubleInLC : IGameMode
         ServerEvent.RespawningTeam += DeniableEvent;
 
         MapEvent.Decontaminating += OnDecontaminating;
+        WarheadEvent.Detonating += OnDetonating;
 
         FFStateBefore = Server.FriendlyFire;
         Server.FriendlyFire = true;
 
         SetupPlayers();
     }
+
     void UnsubscribeEventHandlers()
     {
         PlayerEvent.InteractingElevator -= OnElevator;
@@ -153,6 +160,7 @@ internal class TroubleInLC : IGameMode
         ServerEvent.RespawningTeam -= DeniableEvent;
 
         MapEvent.Decontaminating -= OnDecontaminating;
+        WarheadEvent.Detonating -= OnDetonating;
 
         if (FFStateBefore.HasValue)
             Server.FriendlyFire = FFStateBefore.Value;
@@ -165,10 +173,9 @@ internal class TroubleInLC : IGameMode
 
         foreach (var player in Player.List)
         {
-            Pickup.CreateAndSpawn(
-                ItemType.GunCOM15, 
-                RoleTypeId.Scientist.GetRandomSpawnLocation().Position + Vector3.up + Vector3.back * UnityEngine.Random.Range(-1, 1) + Vector3.left * UnityEngine.Random.Range(-1, 1), 
-                default);
+            var pos = RoleTypeId.Scientist.GetRandomSpawnLocation().Position + Vector3.up + Vector3.back * UnityEngine.Random.Range(-1, 1) + Vector3.left * UnityEngine.Random.Range(-1, 1);
+            Pickup.CreateAndSpawn(ItemType.GunCOM15, pos, default);
+            Pickup.CreateAndSpawn(ItemType.Ammo9x19, pos, default);
         }
 
         float lockTime = 30;
@@ -242,11 +249,12 @@ internal class TroubleInLC : IGameMode
                         {
                             player.Role.Set(RoleTypeId.ChaosRepressor, RoleSpawnFlags.None);
                         }
-                        else if (player.Role.Type switch { RoleTypeId.Scp049 | RoleTypeId.Scp096 | RoleTypeId.Scp079 | RoleTypeId.Scp173 => true, _ => false})
+                        else
                         {
-                            player.Role.Set(RoleTypeId.Scp939, RoleSpawnFlags.None);
+                            var roles = new[] { RoleTypeId.Scp939, RoleTypeId.Scp106, RoleTypeId.Scp096 };
+                            player.Role.Set(roles.GetRandomValue(), RoleSpawnFlags.None);
                         }
-                        troublemakers.Add(player);
+                        traitors.Add(player);
                         break;
                     }
                 default:
@@ -263,7 +271,7 @@ internal class TroubleInLC : IGameMode
 
         Timing.CallDelayed(0.3f, () =>
         {
-            foreach (Player ci in troublemakers)
+            foreach (Player ci in traitors)
             {
                 try
                 {
@@ -303,6 +311,8 @@ internal class TroubleInLC : IGameMode
         if (ci.IsScp)
         {
             ci.ShowHint($"""
+
+
                     You are an SCP Traitor! Kill all the Innocents (<color=yellow>Scientists</color>).
                     You can earn shop credits by killing Innocents (starting {GetCredits(ci)} credits).
 
@@ -316,6 +326,8 @@ internal class TroubleInLC : IGameMode
         else
         {
             ci.ShowHint($"""
+
+
                     You are a Traitor! Kill all the Innocents (<color=yellow>Scientists</color>).
                     You can earn shop credits by killing Innocents (starting {GetCredits(ci)} credits).
                     {OpenStoreInstructions}
@@ -333,6 +345,8 @@ internal class TroubleInLC : IGameMode
         {
             Credits[scientist] = config.TttDetectiveStartCredits;
             scientist.ShowHint($"""
+
+
                 You are a Detective! You can discover a body's killer.
                 You can earn shop credits when a Traitor dies (starting {GetCredits(scientist)} credits).
                 {OpenStoreInstructions}
@@ -341,6 +355,8 @@ internal class TroubleInLC : IGameMode
         else
         {
             scientist.ShowHint($"""
+
+
                 You are an Innocent! Avoid dying, and work together to shoot Traitors!
                 """, 30);
         }
@@ -415,7 +431,7 @@ internal class TroubleInLC : IGameMode
                 if (ev.Player.Role != RoleTypeId.Scientist)
                 {
                     DetectedTraitor = true;
-                    foreach (Player player in Player.List)
+                    foreach (Player player in ev.Player.CurrentRoom.Players)
                     {
                         player.ShowHint("There is at least one <color=green>Traitor</color> in SCP 914", 10);
                     }
@@ -488,6 +504,21 @@ internal class TroubleInLC : IGameMode
             DamagedATeammate.Add(ev.Attacker);
             AdjustKarma(ev.Attacker, -20);
         }
+
+        if (ev.Attacker.IsScp)
+        {
+            // Reveal the SCP traitor to the target, because otherwise it might be too hard to realize who's attacking you.
+            ev.Attacker.ChangeAppearance(ev.Attacker.Role, Player.Get(x => x.Role == RoleTypeId.Scientist));
+            LastAttack[ev.Attacker] = DateTime.Now;
+
+            Timing.CallDelayed(ScpRevealToTargetSeconds, () =>
+            {
+                if ((DateTime.Now - LastAttack[ev.Attacker]).TotalSeconds >= ScpRevealToTargetSeconds - 0.1f)
+                {
+                    ev.Attacker.ChangeAppearance(RoleTypeId.Scientist, Player.Get(x => x.Role == RoleTypeId.Scientist));
+                }
+            });
+        }
     }
 
     public void OnJoin(JoinedEventArgs ev)
@@ -531,6 +562,11 @@ internal class TroubleInLC : IGameMode
         {
             player.Role.Set(RoleTypeId.Spectator);
         }
+    }
+
+    public void OnDetonating(DetonatingEventArgs ev)
+    {
+        ev.IsAllowed = false;
     }
 
     public IEnumerator<float> OnToggleNoclip(TogglingNoClipEventArgs ev)

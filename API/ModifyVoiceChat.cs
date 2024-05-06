@@ -9,11 +9,18 @@ internal static class ModifyVoiceChat
 {
     public static VoiceChatChannel SCPChat(VoiceChatChannel channel, ReferenceHub speaker, ReferenceHub listener)
     {
+        if (speaker.netId == listener.netId)
+        {
+            return VoiceChatChannel.None;
+        }
         switch (EventHandlers.CurrentGame)
         {
             case TroubleInLC:
                 {
-                    if (listener.GetRoleId() != RoleTypeId.Scientist)
+                    if (channel == VoiceChatChannel.Mimicry)
+                        return channel;
+
+                    if (listener.GetRoleId() != RoleTypeId.Scientist && speaker.GetRoleId() != RoleTypeId.Scientist)
                     {
                         return VoiceChatChannel.RoundSummary;
                     }
@@ -25,6 +32,9 @@ internal static class ModifyVoiceChat
                 }
             case DogHideAndSeek:
                 {
+                    if (channel == VoiceChatChannel.Mimicry)
+                        return channel;
+
                     if (listener.IsSCP() && !speaker.IsAlive())
                     {
                         return VoiceChatChannel.RoundSummary;
