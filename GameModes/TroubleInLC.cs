@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using PlayerEvent = Exiled.Events.Handlers.Player;
 using ServerEvent = Exiled.Events.Handlers.Server;
 using Scp914Event = Exiled.Events.Handlers.Scp914;
+using Scp096Event = Exiled.Events.Handlers.Scp096;
 using MapEvent = Exiled.Events.Handlers.Map;
 using WarheadEvent = Exiled.Events.Handlers.Warhead;
 using System;
@@ -245,15 +246,12 @@ internal class TroubleInLC : IGameMode
             {
                 case Team.SCPs:
                     {
-                        if (UnityEngine.Random.Range(0, 101) > 20)
-                        {
-                            player.Role.Set(RoleTypeId.ChaosRepressor, RoleSpawnFlags.None);
-                        }
-                        else
-                        {
-                            var roles = new[] { RoleTypeId.Scp939, RoleTypeId.Scp106, RoleTypeId.Scp096 };
-                            player.Role.Set(roles.GetRandomValue(), RoleSpawnFlags.None);
-                        }
+                        var roles = new[] { 
+                            RoleTypeId.ChaosRepressor, RoleTypeId.ChaosRepressor, RoleTypeId.ChaosRepressor, RoleTypeId.ChaosRepressor,
+                            RoleTypeId.ChaosRepressor, RoleTypeId.ChaosRepressor, RoleTypeId.ChaosRepressor,
+                            RoleTypeId.Scp939, RoleTypeId.Scp106,
+                        };
+                        player.Role.Set(roles.GetRandomValue(), RoleSpawnFlags.None);
                         traitors.Add(player);
                         break;
                     }
