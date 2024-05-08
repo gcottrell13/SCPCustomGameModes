@@ -10,6 +10,7 @@ using ServerEvent = Exiled.Events.Handlers.Server;
 using PlayerEvent = Exiled.Events.Handlers.Player;
 using Exiled.Events.EventArgs.Player;
 using CustomGameModes.GameModes.Normal;
+using Exiled.Events.EventArgs.Interfaces;
 
 namespace CustomGameModes
 {
@@ -42,6 +43,8 @@ namespace CustomGameModes
             ServerEvent.RoundStarted += OnRoundStarted;
             ServerEvent.RoundEnded += OnRoundEnded;
             ServerEvent.WaitingForPlayers += WaitingForPlayers;
+
+            ServerEvent.RespawningTeam += OnRespawningTeam;
         }
 
         internal void UnregisterEvents()
@@ -52,13 +55,15 @@ namespace CustomGameModes
             ServerEvent.RoundEnded -= OnRoundEnded;
             ServerEvent.WaitingForPlayers -= WaitingForPlayers;
 
+            ServerEvent.RespawningTeam -= OnRespawningTeam;
+
             CurrentGame?.OnRoundEnd();
         }
 
         private void WaitingForPlayers()
         {
             CurrentGame?.OnRoundEnd();
-            CurrentGame?.OnWaitingForPlayers();
+            CurrentGame?.OnWaitingForPlayers(); 
 
             GetNextRandomGame();
         }
@@ -86,6 +91,14 @@ namespace CustomGameModes
             if (!IsLobby) return;
 
             ev.Player.Broadcast(new($"<size=20>Next game is</size> {CurrentGame?.Name}", 100), true);
+        }
+
+        private void OnRespawningTeam(RespawningTeamEventArgs ev)
+        {
+            if (Round.IsEnded)
+            {
+                ev.IsAllowed = false;
+            }
         }
 
         private void OnRoundEnded(RoundEndedEventArgs @event)
