@@ -15,6 +15,7 @@ namespace CustomGameModes.Commands
     internal class SCP5000Command : ICommand
     {
         public string Command => "scp5000";
+        public bool SanitizeResponse => false;
 
         public string[] Aliases => Array.Empty<string>();
 

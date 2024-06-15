@@ -16,6 +16,7 @@ namespace CustomGameModes.Commands;
 internal class DisguiseCommand : ICommand
 {
     public string Command => "disguise";
+    public bool SanitizeResponse => false;
 
     public string[] Aliases => Array.Empty<string>();
 

@@ -14,6 +14,7 @@ namespace CustomGameModes.Commands
     internal class VolunteerCommand : ICommand
     {
         public string Command => "volunteer";
+        public bool SanitizeResponse => false;
 
         public string[] Aliases => Array.Empty<string>();
 

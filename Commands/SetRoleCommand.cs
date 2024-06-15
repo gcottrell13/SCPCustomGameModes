@@ -13,6 +13,7 @@ namespace CustomGameModes.Commands
     internal class SetRoleCommand : ICommand
     {
         public string Command => "set-dhas-role";
+        public bool SanitizeResponse => false;
 
         public string[] Aliases => new[] { "dhassr" };
 

@@ -10,7 +10,7 @@ using System.Collections.Generic;
 using PlayerEvent = Exiled.Events.Handlers.Player;
 using ServerEvent = Exiled.Events.Handlers.Server;
 using Scp914Event = Exiled.Events.Handlers.Scp914;
-using Scp096Event = Exiled.Events.Handlers.Scp096;
+using Scp106Event = Exiled.Events.Handlers.Scp106;
 using MapEvent = Exiled.Events.Handlers.Map;
 using WarheadEvent = Exiled.Events.Handlers.Warhead;
 using System;
@@ -23,6 +23,8 @@ using Scp914;
 using UnityEngine;
 using Exiled.API.Features.Pickups;
 using Exiled.Events.EventArgs.Warhead;
+using Exiled.Events.EventArgs.Server;
+using Exiled.Events.EventArgs.Scp106;
 
 namespace CustomGameModes.GameModes;
 
@@ -62,12 +64,22 @@ internal class TroubleInLC : IGameMode
     private bool DetectedTraitor;
     private bool DidResetDetector;
 
+    private RoundEndState RoundEnded;
+
     private CoroutineHandle coroutineHandle;
 
     private Config config;
 
+    private enum RoundEndState
+    {
+        None,
+        Scientists,
+        Traitors,
+    }
+
     public TroubleInLC()
     {
+        RoundEnded = RoundEndState.None;
         LiveKarma = BaseKarma.ToDictionary(kvp => kvp.Key, kvp => kvp.Value); // copy the karma as it was at the beginning of the round
         TrackedPlayers = new HashSet<Player>();
         DamagedATeammate = new HashSet<Player>();
@@ -135,6 +147,9 @@ internal class TroubleInLC : IGameMode
         Scp914Event.UpgradingPlayer += OnUpgradingPlayer;
 
         ServerEvent.RespawningTeam += DeniableEvent;
+        ServerEvent.EndingRound += OnEndingRound;
+
+        Scp106Event.Attacking += OnScp106Attack;
 
         MapEvent.Decontaminating += OnDecontaminating;
         WarheadEvent.Detonating += OnDetonating;
@@ -158,7 +173,10 @@ internal class TroubleInLC : IGameMode
 
         Scp914Event.UpgradingPlayer -= OnUpgradingPlayer;
 
+        Scp106Event.Attacking += OnScp106Attack;
+
         ServerEvent.RespawningTeam -= DeniableEvent;
+        ServerEvent.EndingRound -= OnEndingRound;
 
         MapEvent.Decontaminating -= OnDecontaminating;
         WarheadEvent.Detonating -= OnDetonating;
@@ -239,6 +257,11 @@ internal class TroubleInLC : IGameMode
     {
         Round.IsLocked = true;
 
+        var chaosRoles = new[] { RoleTypeId.ChaosRepressor, RoleTypeId.ChaosConscript };
+        var scpRoles = new[] { RoleTypeId.Scp939, RoleTypeId.Scp106 };
+
+        var traitorRoles = getRolePool(new[] { chaosRoles, chaosRoles, chaosRoles, chaosRoles, scpRoles });
+
         foreach (Player player in Player.List)
         {
             TrackedPlayers.Add(player);
@@ -246,12 +269,7 @@ internal class TroubleInLC : IGameMode
             {
                 case Team.SCPs:
                     {
-                        var roles = new[] { 
-                            RoleTypeId.ChaosRepressor, RoleTypeId.ChaosRepressor, RoleTypeId.ChaosRepressor, RoleTypeId.ChaosRepressor,
-                            RoleTypeId.ChaosRepressor, RoleTypeId.ChaosRepressor, RoleTypeId.ChaosRepressor,
-                            RoleTypeId.Scp939, RoleTypeId.Scp106,
-                        };
-                        player.Role.Set(roles.GetRandomValue(), RoleSpawnFlags.None);
+                        player.Role.Set(traitorRoles.GetNext(), RoleSpawnFlags.None);
                         traitors.Add(player);
                         break;
                     }
@@ -426,7 +444,7 @@ internal class TroubleInLC : IGameMode
             {
                 DidResetDetector = false;
                 ev.Player.Health /= 2;
-                if (ev.Player.Role != RoleTypeId.Scientist)
+                if (ev.Player.Role != RoleTypeId.Scientist && !DetectedTraitor)
                 {
                     DetectedTraitor = true;
                     foreach (Player player in ev.Player.CurrentRoom.Players)
@@ -483,12 +501,7 @@ internal class TroubleInLC : IGameMode
         if (ev.Player == null || ev.Attacker == null)
             return;
 
-        if (ev.Attacker.IsScp && !ev.Attacker.Items.Any(x => x.IsWeapon))
-        {
-            ev.Attacker.ShowHint("You cannot use SCP Attacks unless you have a weapon in your inventory");
-            ev.IsAllowed = false;
-            return;
-        }
+        ev.IsAllowed = tryAttack(ev.Player, ev.Attacker);
 
         if (ev.Player.IsScp)
         {
@@ -503,17 +516,44 @@ internal class TroubleInLC : IGameMode
             AdjustKarma(ev.Attacker, -20);
         }
 
-        if (ev.Attacker.IsScp)
+        if (ev.IsAllowed)
+        {
+            tryRevealScp(ev.Attacker);
+        }
+    }
+
+    public void OnScp106Attack(AttackingEventArgs ev)
+    {
+        ev.IsAllowed = tryAttack(ev.Target, ev.Player);
+        if (ev.IsAllowed)
+        {
+            tryRevealScp(ev.Player);
+        }
+    }
+
+    private bool tryAttack(Player target, Player attacker)
+    {
+        if (attacker.IsScp && !attacker.Items.Any(x => x.IsWeapon))
+        {
+            attacker.ShowHint("You cannot use SCP Attacks unless you have a weapon in your inventory");
+            return false;
+        }
+        return true;
+    }
+
+    private void tryRevealScp(Player attacker)
+    {
+        if (attacker.IsScp)
         {
             // Reveal the SCP traitor to the target, because otherwise it might be too hard to realize who's attacking you.
-            ev.Attacker.ChangeAppearance(ev.Attacker.Role, Player.Get(x => x.Role == RoleTypeId.Scientist));
-            LastAttack[ev.Attacker] = DateTime.Now;
+            attacker.ChangeAppearance(attacker.Role);
+            LastAttack[attacker] = DateTime.Now;
 
             Timing.CallDelayed(ScpRevealToTargetSeconds, () =>
             {
-                if ((DateTime.Now - LastAttack[ev.Attacker]).TotalSeconds >= ScpRevealToTargetSeconds - 0.1f)
+                if ((DateTime.Now - LastAttack[attacker]).TotalSeconds >= ScpRevealToTargetSeconds - 0.1f)
                 {
-                    ev.Attacker.ChangeAppearance(RoleTypeId.Scientist, Player.Get(x => x.Role == RoleTypeId.Scientist));
+                    attacker.ChangeAppearance(RoleTypeId.Scientist, Player.Get(RoleTypeId.Scientist));
                 }
             });
         }
@@ -531,9 +571,9 @@ internal class TroubleInLC : IGameMode
     {
         if (ev.Player.Role.Type == RoleTypeId.Spectator)
         {
-            foreach (var traitor in Player.Get(x => x.Role != RoleTypeId.Scientist))
+            foreach (var player in Player.List)
             {
-                traitor.ChangeAppearance(traitor.Role, new[] { ev.Player });
+                player.ChangeAppearance(player.Role, new[] { ev.Player });
             }
             yield break;
         }
@@ -543,7 +583,7 @@ internal class TroubleInLC : IGameMode
             {
                 Log.Debug($"{ev.Player.DisplayNickname} spawned as {ev.Player.Role.Type}, setting appearance to scientist");
                 yield return Timing.WaitForSeconds(0.5f);
-                ev.Player.ChangeAppearance(RoleTypeId.Scientist, scientists);
+                ev.Player.ChangeAppearance(RoleTypeId.Scientist, Player.Get(RoleTypeId.Scientist));
             }
         }
         else
@@ -556,9 +596,26 @@ internal class TroubleInLC : IGameMode
     public void OnDecontaminating(DecontaminatingEventArgs ev)
     {
         ev.IsAllowed = false;
-        foreach (Player player in Player.Get(x => x.Role != RoleTypeId.Scientist))
+        RoundEnded = RoundEndState.Scientists;
+        //foreach (Player player in Player.Get(x => x.Role != RoleTypeId.Scientist))
+        //{
+        //    player.Role.Set(RoleTypeId.Spectator);
+        //}
+    }
+
+    public void OnEndingRound(EndingRoundEventArgs ev)
+    {
+        if (RoundEnded == RoundEndState.None)
+            return;
+        if (Round.IsLocked)
+            return;
+
+        ev.IsAllowed = true;
+
+        if (RoundEnded == RoundEndState.Scientists)
         {
-            player.Role.Set(RoleTypeId.Spectator);
+            ev.LeadingTeam = LeadingTeam.FacilityForces;
+            Round.EscapedScientists = Player.Get(RoleTypeId.Scientist).Count();
         }
     }
 
@@ -760,5 +817,12 @@ internal class TroubleInLC : IGameMode
         if (closestPickup == null)
             return null;
         return (closestPickup.Position - player.Position).sqrMagnitude < 10 ? closestPickup : null;
+    }
+
+    private ItemPool<RoleTypeId> getRolePool(RoleTypeId[][] selectableRoles)
+    {
+        var roles = selectableRoles.RandomChoice();
+        roles.ShuffleList();
+        return new ItemPool<RoleTypeId>(roles);
     }
 }

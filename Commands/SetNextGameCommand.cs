@@ -12,6 +12,7 @@ namespace CustomGameModes.Commands
     internal class SetNextGameCommand : ICommand
     {
         public string Command => "set-next-game";
+        public bool SanitizeResponse => false;
 
         public string[] Aliases => new[] { "sng" };
 

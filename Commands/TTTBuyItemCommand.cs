@@ -14,6 +14,7 @@ namespace CustomGameModes.Commands;
 internal class TTTBuyItemCommand : ICommand
 {
     public const string CommandName = "ttt-buy";
+    public bool SanitizeResponse => false;
     public string Command => CommandName;
 
     public string[] Aliases => new[] { "ttt" };

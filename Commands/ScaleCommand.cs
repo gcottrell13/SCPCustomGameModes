@@ -14,6 +14,7 @@ namespace CustomGameModes.Commands
     internal class ScaleCommand : ICommand
     {
         public string Command => "scale";
+        public bool SanitizeResponse => false;
 
         public string[] Aliases => Array.Empty<string>();
 

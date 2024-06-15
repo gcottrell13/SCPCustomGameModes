@@ -14,6 +14,7 @@ namespace CustomGameModes.Commands
     internal class SayCountdownCommand : ICommand
     {
         public string Command => "count";
+        public bool SanitizeResponse => false;
 
         public string[] Aliases => Array.Empty<string>();
 

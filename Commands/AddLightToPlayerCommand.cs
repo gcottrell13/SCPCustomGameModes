@@ -14,6 +14,7 @@ namespace CustomGameModes.Commands;
 internal class AddLightToPlayerCommand : ICommand
 {
     public string Command => "player-light";
+    public bool SanitizeResponse => false;
 
     public string[] Aliases => Array.Empty<string>();
 

@@ -13,6 +13,7 @@ namespace CustomGameModes.Commands;
 internal class SpawnBallTag : ICommand
 {
     public string Command => "balltag";
+    public bool SanitizeResponse => false;
 
     public string[] Aliases => Array.Empty<string>();
 

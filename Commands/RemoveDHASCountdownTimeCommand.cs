@@ -12,6 +12,7 @@ namespace CustomGameModes.Commands
     internal class RemoveDHASCountdownTimeCommand : ICommand
     {
         public string Command => "dhas-remove-time";
+        public bool SanitizeResponse => false;
 
         public string[] Aliases => new[] { "dhasrt" };
 

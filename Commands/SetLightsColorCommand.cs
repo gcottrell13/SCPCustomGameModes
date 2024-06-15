@@ -14,6 +14,7 @@ namespace CustomGameModes.Commands
     internal class SetLightsColorCommand : ICommand
     {
         public string Command => "light-color";
+        public bool SanitizeResponse => false;
 
         public string[] Aliases => new[] { "lc" };
 

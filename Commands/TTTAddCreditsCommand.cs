@@ -14,6 +14,7 @@ namespace CustomGameModes.Commands;
 internal class TTTAddCreditsCommand : ICommand
 {
     public string Command => "ttt-credits";
+    public bool SanitizeResponse => false;
 
     public string[] Aliases => new[] { "ttt-credit" };
 
