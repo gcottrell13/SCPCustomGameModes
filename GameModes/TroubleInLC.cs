@@ -173,7 +173,7 @@ internal class TroubleInLC : IGameMode
 
         Scp914Event.UpgradingPlayer -= OnUpgradingPlayer;
 
-        Scp106Event.Attacking += OnScp106Attack;
+        Scp106Event.Attacking -= OnScp106Attack;
 
         ServerEvent.RespawningTeam -= DeniableEvent;
         ServerEvent.EndingRound -= OnEndingRound;
@@ -203,6 +203,11 @@ internal class TroubleInLC : IGameMode
         {
             if (door.Rooms.Count == 2)
                 door.Lock(lockTime, DoorLockType.Regular079);
+        }
+
+        foreach (var coin in Pickup.Get(ItemType.Coin))
+        {
+            coin.Destroy();
         }
 
         while (Round.InProgress)
