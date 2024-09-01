@@ -14,6 +14,7 @@ using Exiled.API.Features.Doors;
 using CustomGameModes.API;
 using Exiled.Events.EventArgs.Scp079;
 using Exiled.API.Extensions;
+using CustomGameModes.Configs;
 
 namespace CustomGameModes.GameModes
 {
@@ -26,6 +27,12 @@ namespace CustomGameModes.GameModes
         public static HashSet<Player> Volunteers = new();
 
         public HashSet<Player> DoomSlayers = new();
+
+        SCP5000TestConfigs config => (CustomGameModes.Singleton?.Config ?? new()).Scp5000;
+
+        public Scp5000Test()
+        {
+        }
 
         public bool Volunteer(Player player)
         {
@@ -48,6 +55,7 @@ namespace CustomGameModes.GameModes
 
             ServerEvent.RespawningTeam -= RespawningTeam;
             ServerEvent.SelectingRespawnTeam -= SelectingRespawnTeam;
+            SCPRandomCoin.API.CoinEffectRegistry.EnableAll();
         }
 
         public void OnRoundStart()
@@ -68,6 +76,9 @@ namespace CustomGameModes.GameModes
                     door.IsOpen = true;
                 }
             }
+
+            SCPRandomCoin.API.CoinEffectRegistry.DisableAll();
+            SCPRandomCoin.API.CoinEffectRegistry.EnableEffects(config.EnableCoinEffects.ToArray());
         }
 
         public void OnWaitingForPlayers()

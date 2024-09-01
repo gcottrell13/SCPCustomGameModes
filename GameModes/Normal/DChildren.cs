@@ -12,7 +12,7 @@ internal class DChildren
 
     public void Setup()
     {
-        if (UnityEngine.Random.Range(0, 101) > CustomGameModes.Singleton.Config.DChildrenChance)
+        if (UnityEngine.Random.Range(0, 101) > CustomGameModes.Singleton.Config.Normal.DChildrenChance)
             return;
 
         foreach (var dclass in Player.Get(RoleTypeId.ClassD))

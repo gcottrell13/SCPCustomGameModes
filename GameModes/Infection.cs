@@ -17,6 +17,7 @@ using CustomGameModes.API;
 using Exiled.API.Structs;
 using Exiled.API.Features.Doors;
 using Exiled.API.Features.Pickups;
+using CustomGameModes.Configs;
 
 namespace CustomGameModes.GameModes
 {
@@ -40,21 +41,18 @@ namespace CustomGameModes.GameModes
         bool ClosedLcz = false;
         bool ClosedHcz = false;
 
+        InfectionConfig config => (CustomGameModes.Singleton?.Config ?? new()).Infection;
+
         public Infection()
         {
             RoleTypeId parsedRole;
-            InfectedRole = Enum.TryParse(CustomGameModes.Singleton.Config.InfectedScpChance.GetRandom(), out parsedRole) ? parsedRole : RoleTypeId.Scp0492;
-            EscapeeRole = Enum.TryParse(CustomGameModes.Singleton.Config.EscapeeScpChance.GetRandom(), out parsedRole) ? parsedRole : RoleTypeId.ChaosConscript;
-            SurvivorRole = Enum.TryParse(CustomGameModes.Singleton.Config.SurvivorScpChance.GetRandom(), out parsedRole) ? parsedRole : RoleTypeId.ClassD;
+            InfectedRole = Enum.TryParse(config.InfectedScpChance.GetRandom(), out parsedRole) ? parsedRole : RoleTypeId.Scp0492;
+            EscapeeRole = Enum.TryParse(config.EscapeeScpChance.GetRandom(), out parsedRole) ? parsedRole : RoleTypeId.ChaosConscript;
+            SurvivorRole = Enum.TryParse(config.SurvivorScpChance.GetRandom(), out parsedRole) ? parsedRole : RoleTypeId.ClassD;
 
             // set this so that the SCPs can properly get a win screen, even if they're all zombies
             Round.EscapedScientists = -1;
             Round.EscapedDClasses = -1;
-        }
-
-        ~Infection()
-        {
-            OnRoundEnd();
         }
 
         public void OnRoundStart()

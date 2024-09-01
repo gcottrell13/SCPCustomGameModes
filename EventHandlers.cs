@@ -151,8 +151,8 @@ namespace CustomGameModes
                 foreach (var player in Player.List)
                 {
                     player.Broadcast(new($"""
-                        <size=20>Next game is</size> {CurrentGame.Name}
-                        <size={CustomGameModes.Singleton.Config.PregameRoundInstructionSize}>{CurrentGame.PreRoundInstructions}</size>
+                        <size=20>Next game is</size> {CurrentGame?.Name ?? "null"}
+                        <size={CustomGameModes.Singleton?.Config.PregameRoundInstructionSize ?? 20}>{CurrentGame?.PreRoundInstructions ?? ""}</size>
                         """, 11), true);
                 }
                 yield return Timing.WaitForSeconds(10f);

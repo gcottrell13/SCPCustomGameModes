@@ -20,6 +20,7 @@ using Exiled.API.Features.Pickups;
 using Scp914;
 using PlayerRoles;
 using Exiled.API.Features.Items;
+using CustomGameModes.Configs;
 
 namespace CustomGameModes.GameModes
 {
@@ -49,14 +50,7 @@ namespace CustomGameModes.GameModes
         bool ReleaseOneMinuteWarning = false;
         bool ReleaseCountdown = false;
 
-        public DogHideAndSeek()
-        {
-        }
-
-        ~DogHideAndSeek()
-        {
-            OnRoundEnd();
-        }
+        DHASConfig config => (CustomGameModes.Singleton?.Config ?? new()).DogHideAndSeek;
 
         public void OnRoundStart()
         {
@@ -90,12 +84,13 @@ namespace CustomGameModes.GameModes
             ReleaseOneMinuteWarning = false;
             ReleaseCountdown = false;
             cassieBeastEscaped = false;
+
+            SCPRandomCoin.API.CoinEffectRegistry.DisableAll();
+            SCPRandomCoin.API.CoinEffectRegistry.EnableEffects(config.EnableCoinEffects.ToArray());
         }
 
         public void OnRoundEnd()
         {
-            Log.Info("Stopping DHAS Game");
-
             // -------------------------------------------------------------
             // Event Handlers
             // -------------------------------------------------------------
@@ -129,6 +124,7 @@ namespace CustomGameModes.GameModes
                 Manager.StopAll();
             }
 
+            SCPRandomCoin.API.CoinEffectRegistry.EnableAll();
             CountdownHelper.Stop();
         }
 

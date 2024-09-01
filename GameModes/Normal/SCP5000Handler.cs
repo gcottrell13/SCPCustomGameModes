@@ -42,7 +42,7 @@ namespace CustomGameModes.GameModes.Normal
 
         public SCP5000Handler()
         {
-            Scp5000Chance = CustomGameModes.Singleton?.Config.Scp5000Chance ?? 0;
+            Scp5000Chance = CustomGameModes.Singleton?.Config.Normal.Scp5000Chance ?? 0;
         }
 
         ~SCP5000Handler()
@@ -262,7 +262,7 @@ namespace CustomGameModes.GameModes.Normal
         {
             if (Scp5000Owner == null) return;
 
-            Scp5000Owner.PlayCassieAnnouncement(CustomGameModes.Singleton.Config.Scp5000CassieIntro, makeNoise: false);
+            Scp5000Owner.PlayCassieAnnouncement(CustomGameModes.Singleton.Config.Normal.Scp5000CassieIntro, makeNoise: false);
             Scp5000Owner.ShowHint("WELCOME NEW USER to SCP-5000.\nOthers cannot see you until you make noise", 7);
         }
 

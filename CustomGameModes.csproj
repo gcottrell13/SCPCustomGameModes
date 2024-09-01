@@ -4,10 +4,12 @@
     <TargetFramework>net48</TargetFramework>
 	  <LangVersion>11</LangVersion>
 	  <nullable>enable</nullable>
+    <BaseOutputPath>$(EXILED_REFERENCES)</BaseOutputPath>
+    <ProduceReferenceAssembly>True</ProduceReferenceAssembly>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="EXILED" Version="8.9.5" />
+    <PackageReference Include="EXILED" Version="8.9.11" />
     <PackageReference Include="Lib.Harmony" Version="2.2.2" />
   </ItemGroup>
 
@@ -29,6 +31,12 @@
     </Reference>
     <Reference Include="UnityEngine.UnityWebRequestModule">
       <HintPath>$(EXILED_REFERENCES)\UnityEngine.UnityWebRequestModule.dll</HintPath>
+    </Reference>
+    <Reference Include="SCPRandomCoin">
+      <HintPath>$(EXILED_REFERENCES)\Release\net48\SCPRandomCoin.dll</HintPath>
+    </Reference>
+    <Reference Include="SCPStore">
+      <HintPath>$(EXILED_REFERENCES)\Release\net48\SCPStore.dll</HintPath>
     </Reference>
   </ItemGroup>
 

@@ -25,6 +25,8 @@ using Exiled.API.Features.Pickups;
 using Exiled.Events.EventArgs.Warhead;
 using Exiled.Events.EventArgs.Server;
 using Exiled.Events.EventArgs.Scp106;
+using SCPStore.API;
+using SCPStore;
 
 namespace CustomGameModes.GameModes;
 
@@ -42,6 +44,7 @@ internal class TroubleInLC : IGameMode
 
     public const string OpenStoreInstructions = "Use ALT to buy items.";
     public const string StoreCycleInstructions = "Press ALT to cycle menu\n";
+    public const string StoreCurrency = "{0} credits";
 
     public HashSet<Player> TrackedPlayers;
     public HashSet<Player> DamagedATeammate;
@@ -68,7 +71,9 @@ internal class TroubleInLC : IGameMode
 
     private CoroutineHandle coroutineHandle;
 
-    private Config config;
+    private TTTConfig config => (CustomGameModes.Singleton?.Config ?? new()).TroubleInLightContainment;
+
+    private Bank bank;
 
     private enum RoundEndState
     {
@@ -79,24 +84,19 @@ internal class TroubleInLC : IGameMode
 
     public TroubleInLC()
     {
+        bank = new Bank();
         RoundEnded = RoundEndState.None;
         LiveKarma = BaseKarma.ToDictionary(kvp => kvp.Key, kvp => kvp.Value); // copy the karma as it was at the beginning of the round
         TrackedPlayers = new HashSet<Player>();
         DamagedATeammate = new HashSet<Player>();
         Credits = new Dictionary<Player, int>();
         Detectives = new HashSet<Player>();
-        config = CustomGameModes.Singleton?.Config ?? new();
         Killers = new Dictionary<Player, Player>();
         RevealedBodies = new HashSet<Ragdoll>();
         LastDetection = DateTime.MinValue;
         DetectedTraitor = false;
         DidResetDetector = false;
         LastAttack = new Dictionary<Player, DateTime>();
-    }
-
-    ~TroubleInLC()
-    {
-        UnsubscribeEventHandlers();
     }
 
     public void OnRoundEnd()
@@ -113,6 +113,8 @@ internal class TroubleInLC : IGameMode
         }
 
         BaseKarma = LiveKarma.ToDictionary(kvp => kvp.Key, kvp => kvp.Value); // copy the karma as it was at the end of the round
+
+        SCPRandomCoin.API.CoinEffectRegistry.EnableAll();
     }
 
     public void OnRoundStart()
@@ -126,6 +128,9 @@ internal class TroubleInLC : IGameMode
         OutputLight.Intensity = 5f;
 
         coroutineHandle = Timing.RunCoroutine(roundCoroutine());
+
+        SCPRandomCoin.API.CoinEffectRegistry.DisableAll();
+        SCPRandomCoin.API.CoinEffectRegistry.EnableEffects(config.EnableCoinEffects.ToArray());
     }
 
     public void OnWaitingForPlayers()
@@ -408,17 +413,9 @@ internal class TroubleInLC : IGameMode
         }
     }
 
-    public void AddCredits(Player player, int amount)
-    {
-        if (!Credits.ContainsKey(player))
-            Credits[player] = 0;
-        Credits[player] += amount;
-    }
+    public void AddCredits(Player player, int amount) => bank.AddCredits(player, StoreCurrency, amount);
 
-    public int GetCredits(Player player)
-    {
-        return Credits.TryGetValue(player, out var credits) ? credits : 0;
-    }
+    public int GetCredits(Player player) => bank.GetCredits(player, StoreCurrency);
 
     public void OnElevator(InteractingElevatorEventArgs ev)
     {
@@ -632,149 +629,54 @@ internal class TroubleInLC : IGameMode
     public IEnumerator<float> OnToggleNoclip(TogglingNoClipEventArgs ev)
     {
         yield return Timing.WaitForOneFrame;
-        if (PlayerHintMenu.ByPlayerDict.TryGetValue(ev.Player, out var menu))
-        {
-            var timeToWaitForSelection = 1f;
-            menu.Next();
-            var current = menu.GetCurrent();
-            if (current != null)
-                menu.CountdownToSelect($"{StoreCycleInstructions}{current.ActionName} in: ", timeToWaitForSelection);
-        }
-        else
-        {
-            List<HintMenuItem> list = new List<HintMenuItem>();
 
-            if (ev.Player.IsScp)
+        if (Store.TryCycleStoreIfExist(ev.Player, StoreCycleInstructions, out Store store))
+            yield break;
+
+        store.GetCredits = bank.GetCredits;
+        store.AddCredits = bank.AddCredits;
+
+        if (ev.Player.IsScp)
+        {
+            if (ev.Player.Items.Count < 8)
             {
-                list.Add(new HintMenuItem(text: () => "Your Inventory:\n-"));
-                if (ev.Player.Items.Count < 8)
+                if (getClosePickup(ev.Player) is Pickup closestPickup)
                 {
-                    if (getClosePickup(ev.Player) is Pickup closestPickup)
-                    {
-                        list.Add(new HintMenuItem(
-                            actionName: $"Pick up item",
-                            text: () =>
+                    store.AddStoreItem(new HintMenuItem(
+                        actionName: $"Pick up item",
+                        text: () =>
+                        {
+                            closestPickup = getClosePickup(ev.Player);
+                            return ColorHelper.Emerald($"Pick up {closestPickup?.Type}");
+                        },
+                        onSelect: () =>
+                        {
+                            if (closestPickup?.IsSpawned == true)
                             {
-                                closestPickup = getClosePickup(ev.Player);
-                                return ColorHelper.Color(Misc.PlayerInfoColorTypes.Emerald, $"Pick up {closestPickup?.Type}");
-                            },
-                            onSelect: () =>
-                            {
-                                if (closestPickup?.IsSpawned == true)
-                                {
-                                    ev.Player.AddItem(closestPickup);
-                                    closestPickup.UnSpawn();
-                                    return "Picked up item";
-                                }
-                                return "Item is gone";
+                                ev.Player.AddItem(closestPickup);
+                                closestPickup.UnSpawn();
+                                return "Picked up item";
                             }
-                        ));
-                    }
-                }
-                if (ev.Player.CurrentItem != null)
-                {
-                    list.Add(new HintMenuItem(
-                        actionName: $"Stow {ev.Player.CurrentItem.Type}",
-                        text: () => ColorHelper.Color(Misc.PlayerInfoColorTypes.BlueGreen, $"Stow {ev.Player.CurrentItem.Type}"),
-                        onSelect: () =>
-                        {
-                            ev.Player.CurrentItem = null;
-                            return $"Put Away Item";
-                        }
-                    ));
-                    list.Add(new HintMenuItem(
-                        actionName: $"Drop {ev.Player.CurrentItem.Type}",
-                        text: () => ColorHelper.Color(Misc.PlayerInfoColorTypes.BlueGreen, $"Drop {ev.Player.CurrentItem.Type}"),
-                        onSelect: () =>
-                        {
-                            ev.Player.DropItem(ev.Player.CurrentItem);
-                            return $"Dropped Item";
+                            return "Item is gone";
                         }
                     ));
                 }
-
-                // show inventory
-                foreach (Item item in ev.Player.Items)
-                {
-                    var thisItem = item;
-                    if (item == ev.Player.CurrentItem)
-                        continue;
-                    list.Add(new HintMenuItem(
-                        actionName: $"Select {thisItem.Type}",
-                        text: () => ColorHelper.Color(Misc.PlayerInfoColorTypes.Yellow, thisItem.Type.ToString()),
-                        onSelect: () =>
-                        {
-                            ev.Player.CurrentItem = thisItem;
-                            return $"Switched to {thisItem.Type}";
-                        }
-                    ));
-                    //list.Add(new HintMenuItem(
-                    //    actionName: $"Drop {thisItem.Type}",
-                    //    text: () => $"Drop {thisItem.Type}",
-                    //    onSelect: () =>
-                    //    {
-                    //        ev.Player.DropItem(thisItem);
-                    //        return $"Dropped Item";
-                    //    }
-                    //));
-                }
-
-                list.Last().ColumnBreakAfter = true;
             }
-
-            list.Add(new HintMenuItem(
-                text: () =>
-                {
-                    var store = config.TttStore;
-                    var balance = GetCredits(ev.Player);
-                    return $"""
-                        Your balance: {balance} credits
-                        -
-                        """;
-                }));
-
-            var shopItemCount = 0;
-            foreach (var shopItem in config.TttStore)
-            {
-                shopItemCount++;
-                var name = shopItem.Key;
-                var cost = shopItem.Value;
-                list.Add(new HintMenuItem(
-                    actionName: $"Buy {name}",
-                    text: () =>
-                    {
-                        var credits = GetCredits(ev.Player);
-                        var color = credits >= cost ? "green" : "red";
-                        var text = $"{name} - <color={color}>{cost} credits</color>";
-                        return text;
-                    }, 
-                    onSelect: () =>
-                    {
-                        if (ev.Player.IsInventoryFull)
-                        {
-                            return $"Inventory full, could not buy {name}";
-                        }
-                        var credits = GetCredits(ev.Player);
-                        if (credits >= cost)
-                        {
-                            AddCredits(ev.Player, -cost);
-                            var newItem = ev.Player.AddItem(name);
-                            if (!ev.Player.IsScp)
-                                return $"Bought {name}";
-                            ev.Player.CurrentItem = newItem;
-                            return $"Bought {name} - Access Inventory with TAB";
-                        }
-                        return $"Insufficient funds for {name}";
-                    }
-                )
-                {
-                    ColumnBreakAfter = shopItemCount % 6 == 0,
-                });
-            }
-
-            menu = new PlayerHintMenu(ev.Player, list);
-            menu.CountdownToSelect($"{StoreCycleInstructions}Closing Menu In: ", 10);
+            store.AddInventoryDisplay();
         }
+
+        store.AddShowBalance(StoreCurrency);
+
+        var shopItemCount = 0;
+        foreach (var shopItem in config.TttStore)
+        {
+            shopItemCount++;
+            var name = shopItem.Key;
+            var cost = shopItem.Value;
+            store.AddStoreItem(name, cost, StoreCurrency);
+        }
+
+        store.DisplayAndCountdown($"{StoreCycleInstructions}Closing Menu In: ", 10);
     }
 
     public void DeniableEvent(IDeniableEvent ev)

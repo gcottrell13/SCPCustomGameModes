@@ -15,6 +15,7 @@ namespace CustomGameModes.GameModes
 
         public void OnRoundEnd()
         {
+            SCPRandomCoin.API.CoinEffectRegistry.EnableAll();
         }
 
         public void OnRoundStart()
@@ -26,6 +27,7 @@ namespace CustomGameModes.GameModes
                 player.Role.Set(PlayerRoles.RoleTypeId.ClassD);
                 player.AddItem(ItemType.Flashlight);
             }
+            SCPRandomCoin.API.CoinEffectRegistry.DisableAll();
         }
 
         public void OnWaitingForPlayers()

@@ -42,7 +42,7 @@ namespace CustomGameModes.GameModes
 
         public BeastRole(Player player, DhasRoleManager manager) : base(player, manager)
         {
-            role = Enum.TryParse(CustomGameModes.Singleton.Config.DhasScpChance.GetRandom(), out RoleTypeId parsedRole) ? parsedRole : RoleTypeId.Scp939;
+            role = Enum.TryParse(CustomGameModes.Singleton.Config.DogHideAndSeek.DhasScpChance.GetRandom(), out RoleTypeId parsedRole) ? parsedRole : RoleTypeId.Scp939;
 
             player.Role.Set(RoleType, RoleSpawnFlags.None);
 
