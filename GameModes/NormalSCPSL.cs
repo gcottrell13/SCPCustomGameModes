@@ -22,7 +22,6 @@ namespace CustomGameModes.GameModes
         public const string StoreCycleInstructions = "Press ALT to cycle menu\n";
         public const string StoreCurrency = "{0} credits";
 
-        SCP5000Handler SCP5000Handler { get; set; }
         ClassDStarterInventory ClassDStarterInventory { get; set; }
         CellGuard CellGuard { get; set; }
         GnomeoSquad GnomeoSquad { get; set; }
@@ -34,7 +33,6 @@ namespace CustomGameModes.GameModes
         public NormalSCPSL()
         {
             bank = new Bank();
-            SCP5000Handler = new SCP5000Handler();
             ClassDStarterInventory = new ClassDStarterInventory();
             CellGuard = new CellGuard();
             GnomeoSquad = new GnomeoSquad();
@@ -57,7 +55,7 @@ namespace CustomGameModes.GameModes
 
         void SubscribeEventHandlers()
         {
-            SCP5000Handler.SubscribeEventHandlers();
+            SCP5000Handler.SubscribeStaticEventHandlers();
             ClassDStarterInventory.SubscribeEventHandlers();
             CellGuard.SubscribeEventHandlers();
             GnomeoSquad.SubscribeEventHandlers();
@@ -69,7 +67,7 @@ namespace CustomGameModes.GameModes
         }
         void UnsubscribeEventHandlers()
         {
-            SCP5000Handler.UnsubscribeEventHandlers();
+            SCP5000Handler.UnsubscribeStaticEventHandlers();
             ClassDStarterInventory.UnsubscribeEventHandlers();
             CellGuard.UnsubscribeEventHandlers();
             GnomeoSquad.UnsubscribeEventHandlers();
@@ -90,6 +88,7 @@ namespace CustomGameModes.GameModes
 
             if (config.StoreAccessRoles.Contains(ev.Player.Role.Type) && config.Store.Count > 0)
             {
+                bank.AddCredits(ev.Player, StoreCurrency, config.CreditsOnSpawn);
                 ev.Player.ShowHint($"As a {ev.Player.Role.Type}\n{OpenStoreInstructions}", 20);
             }
         }

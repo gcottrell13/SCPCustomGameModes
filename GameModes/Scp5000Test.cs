@@ -137,8 +137,8 @@ namespace CustomGameModes.GameModes
         {
             foreach (var human in Player.Get(Team.FoundationForces))
             {
-                var scp5000 = new SCP5000Handler();
-                scp5000.SetupScp5000(human);
+                var scp5000 = new SCP5000Handler(human);
+                scp5000.SetupScp5000();
 
                 new SCP1392Handler().SetupPlayer(human);
 
@@ -169,7 +169,7 @@ namespace CustomGameModes.GameModes
             yield return Timing.WaitForSeconds(3);
             foreach (Player player in ev.Players)
             {
-                new SCP5000Handler().SetupScp5000(player);
+                new SCP5000Handler(player).SetupScp5000();
             }
         }
 

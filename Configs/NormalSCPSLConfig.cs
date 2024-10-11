@@ -19,6 +19,9 @@ public sealed class NormalSCPSLConfig
     [Description("% chance of D-Children")]
     public int DChildrenChance { get; set; } = 10;
 
+    [Description("How many credits the store-roles should get on spawn")]
+    public int CreditsOnSpawn { get; set; } = 10;
+
     [Description("Roles that can access the store")]
     public List<RoleTypeId> StoreAccessRoles { get; set; } = new()
     {

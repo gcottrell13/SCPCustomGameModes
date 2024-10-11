@@ -16,6 +16,8 @@ using Exiled.Events.EventArgs.Scp914;
 using Exiled.API.Extensions;
 using Exiled.Events.EventArgs.Interfaces;
 using Exiled.Events.EventArgs.Scp096;
+using System.Linq;
+using CustomGameModes.API;
 
 namespace CustomGameModes.GameModes.Normal
 {
@@ -32,17 +34,21 @@ namespace CustomGameModes.GameModes.Normal
             Instances.Clear();
         }
 
-        bool HasGivenScp5000 = false;
-        Player? Scp5000Owner = null;
+        Player Scp5000Owner;
         RoleTypeId Scp5000OwnerRole;
-        int Scp5000Chance;
 
         CoroutineHandle scp5000Coroutine;
         DateTime LastNoisyAction;
 
-        public SCP5000Handler()
+        // time between ticks for checking visibility
+        public float TickRateSeconds = 1f;
+
+        Dictionary<Player, int> VisibleTo = new();
+
+        public SCP5000Handler(Player owner)
         {
-            Scp5000Chance = CustomGameModes.Singleton?.Config.Normal.Scp5000Chance ?? 0;
+            Scp5000Owner = owner;
+            Scp5000OwnerRole = owner.Role;
         }
 
         ~SCP5000Handler()
@@ -53,14 +59,18 @@ namespace CustomGameModes.GameModes.Normal
         // ----------------------------------------------------------------------------------------------------
         // ----------------------------------------------------------------------------------------------------
 
-        public void SubscribeEventHandlers()
+        public static void SubscribeStaticEventHandlers()
         {
             Scp914Event.UpgradingPlayer += UpgradingPlayer;
         }
 
+        public static void UnsubscribeStaticEventHandlers()
+        {
+            Scp914Event.UpgradingPlayer -= UpgradingPlayer;
+        }
+
         public void UnsubscribeEventHandlers()
         {
-            PlayerEvent.ReceivingEffect -= ReceivingEffect;
             PlayerEvent.UsingMicroHIDEnergy -= IsNoisy;
             PlayerEvent.ChangingMicroHIDState -= IsNoisy;
             PlayerEvent.InteractingDoor -= IsNoisy;
@@ -95,7 +105,6 @@ namespace CustomGameModes.GameModes.Normal
             Scp3114Event.Revealed -= IsNoisy;
             Scp3114Event.VoiceLines -= IsNoisy;
 
-            Scp914Event.UpgradingPlayer -= UpgradingPlayer;
             PlayerEvent.Shooting -= IsNoisy;
 
             if (scp5000Coroutine.IsRunning)
@@ -107,7 +116,6 @@ namespace CustomGameModes.GameModes.Normal
 
         public void SubscribeOnPlayerGive()
         {
-            PlayerEvent.ReceivingEffect += ReceivingEffect;
             PlayerEvent.InteractingDoor += IsNoisy;
             PlayerEvent.InteractingElevator += IsNoisy;
             PlayerEvent.OpeningGenerator += IsNoisy;
@@ -175,28 +183,18 @@ namespace CustomGameModes.GameModes.Normal
             }
         }
 
-        void UpgradingPlayer(UpgradingPlayerEventArgs ev)
+        static void UpgradingPlayer(UpgradingPlayerEventArgs ev)
         {
-            if (!HasGivenScp5000 && (
+            var chance = CustomGameModes.Singleton?.Config.Normal.Scp5000Chance ?? 0; 
+            if (Instances.Count == 0 && (
                 ev.KnobSetting == Scp914.Scp914KnobSetting.VeryFine
                 || ev.KnobSetting == Scp914.Scp914KnobSetting.Fine
-                ) && UnityEngine.Random.Range(1, 100) <= Scp5000Chance)
+                ) && UnityEngine.Random.Range(1, 100) <= chance)
             {
-                SetupScp5000(ev.Player);
-                PlayIntroCassie();
+                var scp5000 = new SCP5000Handler(ev.Player);
+                scp5000.SetupScp5000();
                 ev.Player.Position = ev.OutputPosition;
                 ev.IsAllowed = false;
-            }
-        }
-
-        void ReceivingEffect(ReceivingEffectEventArgs ev)
-        {
-            if (ev.Player != Scp5000Owner) return;
-
-            if (ev.Effect.GetEffectType() == Exiled.API.Enums.EffectType.Invisible && ev.Intensity == 0)
-            {
-                if (LastNoisyAction > DateTime.Now) return;
-                LastNoisyAction = DateTime.Now;
             }
         }
 
@@ -216,6 +214,7 @@ namespace CustomGameModes.GameModes.Normal
         {
             if (ev.Player != Scp5000Owner) return;
             LastNoisyAction = DateTime.Now + TimeSpan.FromMinutes(5);
+            Scp5000Owner.ChangeAppearance(RoleTypeId.Scp096);
         }
 
         void ResetNoisy(IPlayerEvent ev)
@@ -226,44 +225,42 @@ namespace CustomGameModes.GameModes.Normal
 
         void noisy()
         {
-            Scp5000Owner.DisableEffect(Exiled.API.Enums.EffectType.Invisible);
             if (LastNoisyAction > DateTime.Now) return;
+
+            foreach (var player in allPlayersThatCanBeAffected().Where(x => (x.Position - Scp5000Owner.Position).MagnitudeIgnoreY() < 20))
+            {
+                if (!VisibleTo.ContainsKey(player))
+                {
+                    Scp5000Owner.ChangeAppearance(Scp5000OwnerRole, true);
+                }
+                VisibleTo[player] = 0;
+            }
+
             LastNoisyAction = DateTime.Now;
         }
 
+        IEnumerable<Player> allPlayersThatCanBeAffected() => Player.Get(x => x != Scp5000Owner && x.Role != RoleTypeId.Spectator && x.Role != RoleTypeId.Scp079 && x.Role != RoleTypeId.Overwatch);
 
         void ShouldAdd096Target(AddingTargetEventArgs ev)
         {
             if (ev.Player != Scp5000Owner) return;
-            if (Scp5000Owner.TryGetEffect(Exiled.API.Enums.EffectType.Invisible, out var status) && status.Intensity > 0 && status.Duration > 0)
-            {
-                ev.IsAllowed = false;
-            }
+            ev.IsAllowed = VisibleTo.ContainsKey(ev.Player);
         }
 
         // ----------------------------------------------------------------------------------------------------
         // ----------------------------------------------------------------------------------------------------
 
-        public void SetupScp5000(Player player)
+        public void SetupScp5000()
         {
-            if (Scp5000Owner != null || HasGivenScp5000) throw new Exception("Someone already has SCP 5000");
-
-            HasGivenScp5000 = true;
             Instances.Add(this);
-            Scp5000Owner = player;
-            player.EnableEffect(Exiled.API.Enums.EffectType.Invisible, 4f);
-            Scp5000OwnerRole = player.Role;
+            foreach (var player in allPlayersThatCanBeAffected())
+            {
+                VisibleTo[player] = (int)(-5 / TickRateSeconds);
+            }
+
             SubscribeOnPlayerGive();
             ensureScp5000Thread();
             Log.Info($"Gave SCP 5000 to player {Scp5000Owner.NetId} - {Scp5000Owner.Nickname}");
-        }
-
-        public void PlayIntroCassie()
-        {
-            if (Scp5000Owner == null) return;
-
-            Scp5000Owner.PlayCassieAnnouncement(CustomGameModes.Singleton.Config.Normal.Scp5000CassieIntro, makeNoise: false);
-            Scp5000Owner.ShowHint("WELCOME NEW USER to SCP-5000.\nOthers cannot see you until you make noise", 7);
         }
 
         bool WasRecentlyNoisy => (DateTime.Now - LastNoisyAction).TotalSeconds < 4;
@@ -282,10 +279,30 @@ namespace CustomGameModes.GameModes.Normal
             {
                 if (!WasRecentlyNoisy)
                 {
-                    Scp5000Owner.EnableEffect(Exiled.API.Enums.EffectType.Invisible, 2f);
+                    // Scp5000Owner.EnableEffect(Exiled.API.Enums.EffectType.Invisible, 2f);
+                    foreach (var kvp in VisibleTo.ToList())
+                    {
+                        var player = kvp.Key;
+                        var ticksNotSeen = kvp.Value;
+                        if (player.GetVisionInformation(Scp5000Owner).IsLooking == false)
+                        {
+                            ticksNotSeen++;
+                            VisibleTo[player] = ticksNotSeen;
+                        }
+                        else
+                        {
+                            VisibleTo[player] = 0;
+                        }
+
+                        if (ticksNotSeen >= Round.ElapsedTime.Minutes / 5 + 1)
+                        {
+                            Scp5000Owner.ChangeAppearance(RoleTypeId.Spectator, new[] { player }, true);
+                            VisibleTo.Remove(player);
+                        }
+                    }
                 }
 
-                yield return Timing.WaitForSeconds(1);
+                yield return Timing.WaitForSeconds(TickRateSeconds);
             }
 
             UnsubscribeEventHandlers();

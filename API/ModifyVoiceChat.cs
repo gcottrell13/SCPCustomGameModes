@@ -26,7 +26,7 @@ internal static class ModifyVoiceChat
                     }
                     else if (speaker.IsSCP())
                     {
-                        return VoiceChatChannel.Proximity;
+                        return VoiceChatChannel.None;
                     }
                     break;
                 }

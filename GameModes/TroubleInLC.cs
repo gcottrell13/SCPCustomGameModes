@@ -10,13 +10,12 @@ using System.Collections.Generic;
 using PlayerEvent = Exiled.Events.Handlers.Player;
 using ServerEvent = Exiled.Events.Handlers.Server;
 using Scp914Event = Exiled.Events.Handlers.Scp914;
-using Scp106Event = Exiled.Events.Handlers.Scp106;
+using Scp173Event = Exiled.Events.Handlers.Scp173;
 using MapEvent = Exiled.Events.Handlers.Map;
 using WarheadEvent = Exiled.Events.Handlers.Warhead;
 using System;
 using System.Linq;
 using Exiled.Events.EventArgs.Map;
-using Exiled.API.Features.Items;
 using CustomGameModes.Configs;
 using CustomGameModes.API;
 using Scp914;
@@ -27,6 +26,8 @@ using Exiled.Events.EventArgs.Server;
 using Exiled.Events.EventArgs.Scp106;
 using SCPStore.API;
 using SCPStore;
+using PluginAPI.Roles;
+using Exiled.API.Features.Roles;
 
 namespace CustomGameModes.GameModes;
 
@@ -154,8 +155,6 @@ internal class TroubleInLC : IGameMode
         ServerEvent.RespawningTeam += DeniableEvent;
         ServerEvent.EndingRound += OnEndingRound;
 
-        Scp106Event.Attacking += OnScp106Attack;
-
         MapEvent.Decontaminating += OnDecontaminating;
         WarheadEvent.Detonating += OnDetonating;
 
@@ -177,8 +176,6 @@ internal class TroubleInLC : IGameMode
         PlayerEvent.UsingItem -= OnUsingItem;
 
         Scp914Event.UpgradingPlayer -= OnUpgradingPlayer;
-
-        Scp106Event.Attacking -= OnScp106Attack;
 
         ServerEvent.RespawningTeam -= DeniableEvent;
         ServerEvent.EndingRound -= OnEndingRound;
@@ -268,9 +265,11 @@ internal class TroubleInLC : IGameMode
         Round.IsLocked = true;
 
         var chaosRoles = new[] { RoleTypeId.ChaosRepressor, RoleTypeId.ChaosConscript };
-        var scpRoles = new[] { RoleTypeId.Scp939, RoleTypeId.Scp106 };
+        var scpRoles = new[] { RoleTypeId.Scp939, RoleTypeId.Scp173 };
 
-        var traitorRoles = getRolePool(new[] { chaosRoles, chaosRoles, chaosRoles, chaosRoles, scpRoles });
+        Scp173Role.TurnedPlayers.UnionWith(Player.List);
+
+        var traitorRoles = getRolePool(new[] { chaosRoles, chaosRoles, chaosRoles, chaosRoles });
 
         foreach (Player player in Player.List)
         {
@@ -503,37 +502,36 @@ internal class TroubleInLC : IGameMode
         if (ev.Player == null || ev.Attacker == null)
             return;
 
-        ev.IsAllowed = tryAttack(ev.Player, ev.Attacker);
-
         if (ev.Player.IsScp)
         {
+            ev.IsAllowed = scpCanAttack(ev.Player, ev.Attacker);
             ev.Amount = ev.Player.MaxHealth / 5;
-        }
-
-        ev.Amount *= DamageMultiplierFromKarma(ev.Attacker);
-
-        if (ev.Player.Role.Team == ev.Attacker.Role.Team)
-        {
-            DamagedATeammate.Add(ev.Attacker);
-            AdjustKarma(ev.Attacker, -20);
         }
 
         if (ev.IsAllowed)
         {
+            ev.Amount *= DamageMultiplierFromKarma(ev.Attacker);
+
+            if (ev.Player.Role.Team == ev.Attacker.Role.Team)
+            {
+                DamagedATeammate.Add(ev.Attacker);
+                AdjustKarma(ev.Attacker, -20);
+            }
+
             tryRevealScp(ev.Attacker);
         }
     }
 
     public void OnScp106Attack(AttackingEventArgs ev)
     {
-        ev.IsAllowed = tryAttack(ev.Target, ev.Player);
+        ev.IsAllowed = scpCanAttack(ev.Target, ev.Player);
         if (ev.IsAllowed)
         {
             tryRevealScp(ev.Player);
         }
     }
 
-    private bool tryAttack(Player target, Player attacker)
+    private bool scpCanAttack(Player target, Player attacker)
     {
         if (attacker.IsScp && !attacker.Items.Any(x => x.IsWeapon))
         {
@@ -551,8 +549,16 @@ internal class TroubleInLC : IGameMode
             attacker.ChangeAppearance(attacker.Role);
             LastAttack[attacker] = DateTime.Now;
 
+            if (attacker.Role == RoleTypeId.Scp173)
+            {
+                Scp173Role.TurnedPlayers.Clear();
+            }
+            attacker.DisableEffect(EffectType.Slowness);
+
             Timing.CallDelayed(ScpRevealToTargetSeconds, () =>
             {
+                Scp173Role.TurnedPlayers.UnionWith(Player.List);
+                attacker.DisableEffect(EffectType.Slowness);
                 if ((DateTime.Now - LastAttack[attacker]).TotalSeconds >= ScpRevealToTargetSeconds - 0.1f)
                 {
                     attacker.ChangeAppearance(RoleTypeId.Scientist, Player.Get(RoleTypeId.Scientist));
@@ -646,8 +652,7 @@ internal class TroubleInLC : IGameMode
                         actionName: $"Pick up item",
                         text: () =>
                         {
-                            closestPickup = getClosePickup(ev.Player);
-                            return ColorHelper.Emerald($"Pick up {closestPickup?.Type}");
+                            return ColorHelper.Emerald($"Pick up {closestPickup.Type}");
                         },
                         onSelect: () =>
                         {
